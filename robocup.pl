@@ -1,3 +1,7 @@
+:- assertz(file_search_path(library,pce('prolog/lib'))).
+
+:- use_module(library(pce)).
+
 :- dynamic field/1, ball/1, player/4.
 
 % Define the soccer field dimensions.
@@ -9,11 +13,11 @@ ball(position(50, 25)).
 % Define player positions and states.
 % Team 1 players:
 player(team1, forward, position(20, 25), stamina(100)).
-player(team1, defender, position(10, 25), stamina(100)).
+player(team1, defender, position(10, 12), stamina(100)).
 player(team1, goalkeeper, position(5, 25), stamina(100)).
 % Team 2 players:
 player(team2, forward, position(80, 25), stamina(100)).
-player(team2, defender, position(90, 25), stamina(100)).
+player(team2, defender, position(90, 20), stamina(100)).
 player(team2, goalkeeper, position(95, 25), stamina(100)).
 
 
@@ -29,7 +33,7 @@ move_towards_ball(Team, Role) :-
     NewY is Y1 + DY,
     retract(player(Team, Role, position(X1, Y1), stamina(S))),
     assertz(player(Team, Role, position(NewX, NewY), stamina(S))),
-    format('~w ~w moves to (~w, ~w)~n', [Team, Role, NewX, NewY]).
+    format('~w ~w moves to (~w, ~w)~n', [Team, Role, NewX, NewY]) , !.
 
 % Sign function to normalize movement.
 sign(X, 1) :- X > 0.
@@ -40,7 +44,7 @@ sign(X, 0) :- X =:= 0.
 kick_ball(Team, Role) :-
     player(Team, Role, position(X1, Y1), stamina(S)),
     ball(position(X2, Y2)),
-    abs(X1 - X2) =< 10, abs(Y1 - Y2) =< 10, % Relaxed kicking range for action
+    abs(X1 - X2) =< 2, abs(Y1 - Y2) =< 2, % Relaxed kicking range for action
     goal_position(Team, GoalX, GoalY),
     XDiff is GoalX - X2,
     YDiff is GoalY - Y2,
@@ -50,7 +54,7 @@ kick_ball(Team, Role) :-
     NewBallY is Y2 + DY,
     retract(ball(position(X2, Y2))),
     assertz(ball(position(NewBallX, NewBallY))),
-    format('~w ~w kicks the ball to (~w, ~w)~n', [Team, Role, NewBallX, NewBallY]).
+    format('~w ~w kicks the ball to (~w, ~w)~n', [Team, Role, NewBallX, NewBallY]), !.
 
 % Goal position depending on the team.
 goal_position(team1, 0, 25).
@@ -64,8 +68,11 @@ catch_ball(Team, Role) :-
     abs(X - BX) =< 2,
     abs(Y - BY) =< 2,
     retract(ball(position(BX, BY))),
-    assertz(ball(position(X, Y))),
-    format('~w ~w catches the ball at (~w, ~w)!~n', [Team, Role, X, Y]).
+    assertz(ball(position(50, 25))),
+    format('~w ~w catches the ball at (~w, ~w)!~n', [Team, Role, X, Y]), !.
+
+
+
 
 
 % Simulate one round of the game.
@@ -92,3 +99,63 @@ run_simulation(N) :-
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
+
+
+:- pce_global(@soccer_window, new(picture('Prolog Soccer Simulation'))).
+
+% Create the gui window
+create_gui :-
+    send(@soccer_window, size, size(500, 250)),
+    send(@soccer_window, open),
+    draw_field,
+    draw_players,
+    draw_ball.
+
+draw_field :-
+    send(@soccer_window, display, new(Box, box(400, 200))),
+    send(Box, pen, 2),
+    send(Box, move, point(50, 25)),
+    send(Box, fill_pattern, colour(green)).
+
+draw_players :-
+    forall(player(Team, Role, position(X, Y), _),
+           (convert_coords(X, Y, CX, CY),
+            send(@soccer_window, display, new(Circle, circle(10))),
+            (Team == team1 -> send(Circle, fill_pattern, colour(red)) ; send(Circle, fill_pattern, colour(blue))),
+            send(Circle, move, point(CX, CY)),
+            send(@soccer_window, display, new(T, text(Role))),
+            send(T, move, point(CX, CY - 12)))).
+
+draw_ball :-
+    ball(position(X, Y)),
+    convert_coords(X, Y, CX, CY),
+    send(@soccer_window, display, new(Ball, circle(8))),
+    send(Ball, fill_pattern, colour(black)),
+    send(Ball, move, point(CX, CY)).
+
+% Convert field coordinates to gui coordinates
+convert_coords(X, Y, CX, CY) :-
+    CX is 50 + X * 4,
+    CY is 25 + Y * 4.
+
+% Update the GUI after a simulation step
+update_gui :-
+    send(@soccer_window, clear),
+    draw_field,
+    draw_players,
+    draw_ball.
+
+% Run simulation with GUI updates
+run_simulation_gui(N) :-
+    create_gui,
+    run_simulation_gui_loop(N).
+
+run_simulation_gui_loop(0).
+run_simulation_gui_loop(N) :-
+    N > 0,
+    simulate_round,
+    update_gui,
+    send(@soccer_window, flush),
+    sleep(0.05),
+    N1 is N - 1,
+    run_simulation_gui_loop(N1).
