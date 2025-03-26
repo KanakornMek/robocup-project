@@ -27,8 +27,7 @@ move_towards_ball(Team, Role) :-
     ball(position(X2, Y2)),
     XDiff is X2 - X1,
     YDiff is Y2 - Y1,
-    sign(XDiff, DX),
-    sign(YDiff, DY),
+    normalize(XDiff, YDiff, DX, DY),
     NewX is X1 + DX,
     NewY is Y1 + DY,
     retract(player(Team, Role, position(X1, Y1), stamina(S))),
@@ -39,6 +38,15 @@ move_towards_ball(Team, Role) :-
 sign(X, 1) :- X > 0.
 sign(X, -1) :- X < 0.
 sign(X, 0) :- X =:= 0.
+
+normalize(DX1, DY1, DX, DY) :-
+    L is sqrt(DX1**2+DY1**2),
+    DX is DX1/L,
+    DY is DY1/L.
+
+
+% Goalkeeper tries to intercept the ball if close enough.
+
 
 % Kick the ball towards the goal.
 kick_ball(Team, Role) :-
