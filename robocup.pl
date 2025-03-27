@@ -3,6 +3,7 @@
 
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
+:- dynamic score/2.
 
 % Define the soccer field dimensions.
 field(size(1000, 500)).
@@ -21,6 +22,9 @@ player(p5, team2, forward, position(800, 250), stamina(100)).
 player(p6, team2, forward, position(600, 200), stamina(100)).
 player(p7, team2, defender, position(900, 200), stamina(100)).
 player(p8, team2, goalkeeper, position(950, 250), stamina(100)).
+
+score(team1, 0).
+score(team2, 0).
 
 % Update the ball holder when a player has the ball
 update_ball_holder(PlayerID) :-
@@ -191,7 +195,11 @@ check_goal(Team) :-
     ball(position(BX, BY)),
     get_other_team(Team, Other_team),
     goal_position(Other_team, BX, BY),
-    format('~w Score a Goal!!', [Team]), !.
+    score(Team, S),
+    Snew is S+1,
+    retract(score(Team, S)),
+    assertz(score(Team, Snew)),
+    format('~w Score a Goal!! score ~w', [Team, Snew]), !.
 
 
 check_ball_out :-
@@ -264,6 +272,7 @@ simulate_round :-
     format('Ball is now at (~w, ~w)~n', [BX, BY]).
 
 run_simulation(0).
+
 run_simulation(N) :-
     N > 0,
     simulate_round,
@@ -350,6 +359,9 @@ run_simulation_gui(N) :-
     run_simulation_gui_loop(N).
 
 run_simulation_gui_loop(0) :-
+    score(team1, S1),
+    score(team2, S2),
+    format('Current scores: ~w : ~w~n', [S1, S2]),
     format('Simulation finished.~n').
 run_simulation_gui_loop(N) :-
     N > 0,
