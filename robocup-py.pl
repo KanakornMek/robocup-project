@@ -1,4 +1,11 @@
-:- dynamic field/1, ball/1, player/5, ball_holder/1.
+% :- assertz(file_search_path(library,pce('prolog/lib'))).
+
+% :- use_module(library(pce)).
+
+:- dynamic field/1, ball/1, player/4.
+
+% Dynamically track who holds the ball
+:- dynamic ball_holder/2.
 
 % Define the soccer field dimensions.
 field(size(100, 50)).
@@ -6,46 +13,85 @@ field(size(100, 50)).
 % Define the ball's initial position.
 ball(position(50, 25)).
 
-% Define player positions and states with unique IDs.
-player(p1, team1, forward, position(20, 25), stamina(100)).
-player(p2, team1, forward, position(40, 30), stamina(100)).
-player(p3, team1, defender, position(10, 12), stamina(100)).
-player(p4, team1, goalkeeper, position(5, 25), stamina(100)).
-player(p5, team2, forward, position(80, 25), stamina(100)).
-player(p6, team2, forward, position(60, 20), stamina(100)).
-player(p7, team2, defender, position(90, 20), stamina(100)).
-player(p8, team2, goalkeeper, position(95, 25), stamina(100)).
+% Define player positions and states.
+% Team 1 players:
+player(team1, forward, position(20, 25), stamina(100)).
+player(team1, forward, position(40, 30), stamina(100)).
+player(team1, defender, position(10, 12), stamina(100)).
+player(team1, goalkeeper, position(5, 25), stamina(100)).
+% Team 2 players:
+player(team2, forward, position(80, 25), stamina(100)).
+player(team2, forward, position(60, 20), stamina(100)).
+player(team2, defender, position(90, 20), stamina(100)).
+player(team2, goalkeeper, position(95, 25), stamina(100)).
 
-% Update the ball holder when a player has the ball.
-update_ball_holder(PlayerID) :-
-    retractall(ball_holder(_)),  
-    assertz(ball_holder(PlayerID)),  
-    player(PlayerID, _, _, position(X, Y), _),
+
+% Update the ball holder when a player has the ball
+update_ball_holder(Team, Role, X, Y) :-
+    retractall(ball_holder(_, _, _, _)),  % Remove any previous ball holder
+    assertz(ball_holder(Team, Role, X, Y)), % Set new ball holder
+    % Ball is now at the position of the ball holder
     retract(ball(position(_, _))),
     assertz(ball(position(X, Y))).
 
+
+
 % Move towards the ball
-move_towards_ball(PlayerID) :-
-    player(PlayerID, Team, Role, position(X1, Y1), stamina(S)),
+move_towards_ball(Team, Role) :-
+    player(Team, Role, position(X1, Y1), stamina(S)),
     ball(position(X2, Y2)),
     XDiff is X2 - X1,
     YDiff is Y2 - Y1,
-    (Role == forward -> (prioritize_offensive_move(XDiff, YDiff), move_to_open_space(Team, X1, Y1, NewX, NewY)) ; true), 
+    (Role == forward -> (prioritize_offensive_move(XDiff, YDiff), move_to_open_space(Team, X1, Y1, NewX, NewY)) ; true), % Forwards focus on the attack
     normalize(XDiff, YDiff, DX, DY),
     NewX is X1 + DX,
     NewY is Y1 + DY,
-    retract(player(PlayerID, Team, Role, position(X1, Y1), stamina(S))),
-    assertz(player(PlayerID, Team, Role, position(NewX, NewY), stamina(S))),
+    retract(player(Team, Role, position(X1, Y1), stamina(S))),
+    assertz(player(Team, Role, position(NewX, NewY), stamina(S))),
     format('~w ~w moves to (~w, ~w)~n', [Team, Role, NewX, NewY]),
+    % Update ball holder if near the ball
     (abs(NewX - X2) =< 2, abs(NewY - Y2) =< 2 -> 
-        (update_ball_holder(PlayerID), 
+        (update_ball_holder(Team, Role, NewX, NewY), 
         format('~w ~w holds the ball~n',[Team, Role])) ; true), !.
 
+% Prioritize attacking or intercepting for forwards
+prioritize_offensive_move(XDiff, YDiff) :-
+    (XDiff > 0 -> true ; XDiff < 0 -> true ; YDiff > 0).
+
+% Move to an open space with no enemies nearby
+move_to_open_space(Team, X1, Y1, NewX, NewY) :-
+    findall(position(EX, EY), (player(OpponentTeam, _, position(EX, EY), _), OpponentTeam \= Team), EnemyPositions),
+    find_open_space(X1, Y1, EnemyPositions, NewX, NewY).
+
+% Find an open space away from enemies
+find_open_space(X1, Y1, EnemyPositions, NewX, NewY) :-
+    between(-20, 20, DX), between(-20, 20, DY), % Search within a 20-unit radius
+    NewX is X1 + DX, NewY is Y1 + DY,
+    \+ is_near_enemy(NewX, NewY, EnemyPositions), !.
+
+% Check if a position is near any enemy
+is_near_enemy(X, Y, EnemyPositions) :-
+    member(position(EX, EY), EnemyPositions),
+    abs(X - EX) =< 2, abs(Y - EY) =< 2.
+
+% Sign function to normalize movement.
+sign(X, 1) :- X > 0.
+sign(X, -1) :- X < 0.
+sign(X, 0) :- X =:= 0.
+
+normalize(DX1, DY1, DX, DY) :-
+    L is sqrt(DX1**2+DY1**2),
+    ( L =:= 0 -> DX = 0, DY = 0 ; 
+    DX is DX1/L,
+    DY is DY1/L).
+
+
+
 % Kick the ball towards the goal.
-kick_ball(PlayerID) :-
-    player(PlayerID, Team, Role, position(X1, Y1), stamina(S)),
+kick_ball(Team, Role) :-
+    player(Team, Role, position(X1, Y1), stamina(S)),
     ball(position(X2, Y2)),
-    abs(X1 - X2) =< 2, abs(Y1 - Y2) =< 2, 
+    abs(X1 - X2) =< 2, abs(Y1 - Y2) =< 2, % Relaxed kicking range for action
     goal_position(Team, GoalX, GoalY),
     XDiff is GoalX - X2,
     YDiff is GoalY - Y2,
@@ -57,41 +103,73 @@ kick_ball(PlayerID) :-
     assertz(ball(position(NewBallX, NewBallY))),
     format('~w ~w kicks the ball to (~w, ~w)~n', [Team, Role, NewBallX, NewBallY]), !.
 
-% Ensure only the player holding the ball can pass it.
-pass_ball(PlayerID) :-
-    ball_holder(PlayerID), 
-    player(PlayerID, Team, Role, position(X1, Y1), _),
-    player(TeammateID, Team, _, position(X2, Y2), _),
-    PlayerID \= TeammateID, 
-    abs(X1 - X2) < 20, 
-    abs(Y1 - Y2) < 20, 
-    retract(ball_holder(PlayerID)),
-    assertz(ball_holder(TeammateID)),
-    format('~w ~w passes the ball to teammate (~w, ~w)~n', [Team, Role, X2, Y2]).
+% Ensure that only the player holding the ball can pass it.
+pass_ball(Team, Role) :-
+    ball_holder(Team, Role), % Ensure that the player is holding the ball
+    player(Team, Role, position(X1, Y1), _),
+    player(Team, _, position(X2, Y2), _),
+    abs(X1 - X2) < 20, % Teammate within 20 units 
+    abs(Y1 - Y2) < 20, % Teammate within 20 units
+    % Update ball holder to the new player
+    retract(ball_holder(Team, Role)),
+    assertz(ball_holder(Team, _)),
+    format('~w ~w passes the ball to teammate at (~w, ~w)~n', [Team, Role, X2, Y2]).
+
+
+% Find a teammate who is in a better position (closer to the goal or free of defenders)
+find_teammate_in_better_position(Team, X, Y, Role, TeammateX, TeammateY) :-
+    player(Team, Role, position(TeammateX, TeammateY), _),
+    abs(X - TeammateX) =< 10,  % Teammate within 10 units
+    abs(Y - TeammateY) =< 10,  % Teammate within 10 units
+    teammate_is_better_position(TeammateX, TeammateY).
+
+% Evaluate if a teammate is in a better position (e.g., closer to the goal)
+teammate_is_better_position(X, Y) :-
+    (goal_position(team1, GoalX, _), X < GoalX);  % For Team1, closer to the goal
+    (goal_position(team2, GoalX, _), X > GoalX).  % For Team2, closer to the goal
+
+
+
+% Goal position depending on the team.
+goal_position(team1, 0, 25).
+goal_position(team2, 100, 25).
+
 
 % Goalkeeper catches the ball if close enough.
-catch_ball(PlayerID) :-
-    player(PlayerID, Team, goalkeeper, position(X, Y), _),
+catch_ball(Team, Role) :-
+    player(Team, Role, position(X, Y), stamina(S)),
     ball(position(BX, BY)),
     abs(X - BX) =< 2,
     abs(Y - BY) =< 2,
     retract(ball(position(BX, BY))),
     assertz(ball(position(50, 25))),
-    format('~w goalkeeper catches the ball at (~w, ~w)!~n', [Team, X, Y]), !.
+    format('~w ~w catches the ball at (~w, ~w)!~n', [Team, Role, X, Y]), !.
 
-% Run simulation
+
+
+
+
+% Simulate one round of the game.
 simulate_round :-
-    (pass_ball(p1) ; true),
-    (pass_ball(p5) ; true),
-    (move_towards_ball(p1) ; true),
-    (move_towards_ball(p3) ; true),
-    (move_towards_ball(p5) ; true),
-    (move_towards_ball(p7) ; true),
-    (catch_ball(p4) ; true),
-    (catch_ball(p8) ; true),
-    ball(position(BX, BY)),
+    % Attempt kicking first, prioritizing Team 1 then Team 2
+    % (kick_ball(team1, forward ) ; true),
+    % (kick_ball(team2, forward ) ; true),
+    % Attempt passing to a teammate
+    (pass_ball(team1, forward) ; true),
+    (pass_ball(team2, forward) ; true),
+    % Move all players
+    (move_towards_ball(team1, forward) ; true),
+    (move_towards_ball(team1, defender) ; true),
+    (move_towards_ball(team2, forward) ; true),
+    (move_towards_ball(team2, defender) ; true),
+    % Goalkeepers attempt to catch.
+    (catch_ball(team1, goalkeeper) ; true),
+    (catch_ball(team2, goalkeeper) ; true),
+    % Print current ball position.
+    ball(position( BX, BY)),
     format('Ball is now at (~w, ~w)~n', [BX, BY]).
 
+% Run simulation for N rounds.
 run_simulation(0).
 run_simulation(N) :-
     N > 0,
