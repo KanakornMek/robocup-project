@@ -114,7 +114,7 @@ kick_ball(PlayerID) :-
     ball(position(X2, Y2)),
     ProximityThreshold is 20,
     abs(X1 - X2) =< ProximityThreshold, abs(Y1 - Y2) =< ProximityThreshold, % Scaled kicking range
-    goal_position(Team, GoalX, GoalY),
+    middle_goal_position(Team, GoalX, GoalY),
     XDiff is GoalX - X2,
     YDiff is GoalY - Y2,
     normalize(XDiff, YDiff, DX, DY), % Normalize direction
@@ -149,12 +149,50 @@ find_teammate_in_better_position(PlayerID, Team, X, Y, TeammateID, TeammateX, Te
 
 % Evaluate if a teammate is in a better position (e.g., closer to the goal)
 teammate_is_better_position(Team, X, _) :-
-    (Team == team1, goal_position(team1, GoalX, _), X < GoalX);  % For Team1, closer to the goal
-    (Team == team2, goal_position(team2, GoalX, _), X > GoalX).  % For Team2, closer to the goal
+    (Team == team1, middle_goal_position(team1, GoalX, _), X < GoalX);  % For Team1, closer to the goal
+    (Team == team2, middle_goal_position(team2, GoalX, _), X > GoalX).  % For Team2, closer to the goal
+
+
+distance(X, Y, L) :-
+    L is sqrt((X**2) + (Y**2)).
 
 % Goal position depending on the team.
-goal_position(team1, 0, 250).
-goal_position(team2, 1000, 250).
+goal_position(team1, 0, X) :-
+    X >= 200,
+    X =< 300.
+goal_position(team2, 1000, X) :-
+    X >= 200,
+    X =< 300.
+
+middle_goal_position(team1, 0, 250).
+middle_goal_position(team2, 1000, 250).
+
+get_other_team(team1, team2).
+get_other_team(team2, team1).
+
+
+shoot(PlayerID) :-
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    ball_holder(PlayerID),
+    get_other_team(Team, Other_team),
+    middle_goal_position(Other_team, GX, GY),
+    ball(position(X2, Y2)),
+    DX is abs(X - GX),
+    DY is abs(Y - GY),
+    distance(DX, DY, L),
+    L =< 500,
+    retract(ball(position(X2, Y2))),
+    assertz(ball(position(GX, GY))),
+    format('~w ~w ~w shoot the ball to (~w, ~w)~n', [PlayerID, Team, Role, GX, GY]), !.
+    
+
+check_goal(Team) :-
+    ball(position(BX, BY)),
+    get_other_team(Team, Other_team),
+    goal_position(Other_team, BX, BY),
+    format('~w Score a Goal!!', [Team]), !.
+
+    
 
 % Goalkeeper catches the ball if close enough.
 catch_ball(PlayerID) :-
@@ -172,6 +210,11 @@ catch_ball(PlayerID) :-
 
 % Simulate one round of the game. (Logic structure unchanged)
 simulate_round :-
+
+    forall(player(PlayerID,_,_,_,_),
+       ( shoot(PlayerID); true )
+    ; true ),
+
     % Ball Holder Actions first (Pass)
     ( ball_holder(HolderID) ->
         ( (pass_ball(HolderID); true) )
