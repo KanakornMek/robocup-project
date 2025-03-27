@@ -42,7 +42,13 @@ move_towards_ball(PlayerID) :-
     ball(position(X2, Y2)),
     XDiff is X2 - X1,
     YDiff is Y2 - Y1,
-    (Role == forward -> (prioritize_offensive_move(XDiff, YDiff), move_to_open_space(Team, X1, Y1, NewX, NewY)) ; true), % Forwards focus on the attack
+    % Check if the player is a forward and whether there is a ball holder
+    ((Role == forward -> 
+        (
+            ball_holder(_),  % Check if there is a ball holder
+            prioritize_offensive_move(XDiff, YDiff), 
+            move_to_open_space(Team, X1, Y1, NewX, NewY)
+        ) ; true); true),  % For forwards, check if there's a ball holder before moving
     normalize(XDiff, YDiff, DX, DY),
     NewX is X1 + DX,
     NewY is Y1 + DY,
@@ -59,6 +65,9 @@ prioritize_offensive_move(XDiff, YDiff) :-
 
 % Move to an open space with no enemies nearby
 move_to_open_space(Team, X1, Y1, NewX, NewY) :-
+    ball_holder(PlayerID),
+    player(PlayerID, HoldingTeam, _, _, _),
+    (HoldingTeam \= Team),
     findall(position(EX, EY), (player(_,OpponentTeam, _, position(EX, EY), _), OpponentTeam \= Team), EnemyPositions),
     find_open_space(X1, Y1, EnemyPositions, NewX, NewY).
 
@@ -181,7 +190,6 @@ run_simulation(N) :-
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
-
 
 % :- pce_global(@soccer_window, new(picture('Prolog Soccer Simulation'))).
 
