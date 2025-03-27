@@ -181,9 +181,10 @@ shoot(PlayerID) :-
     DY is abs(Y - GY),
     distance(DX, DY, L),
     L =< 500,
+    random(190, 310, RY),
     retract(ball(position(X2, Y2))),
-    assertz(ball(position(GX, GY))),
-    format('~w ~w ~w shoot the ball to (~w, ~w)~n', [PlayerID, Team, Role, GX, GY]), !.
+    assertz(ball(position(GX, RY))),
+    format('~w ~w ~w shoot the ball to (~w, ~w)~n', [PlayerID, Team, Role, GX, RY]), !.
     
 
 check_goal(Team) :-
@@ -192,7 +193,29 @@ check_goal(Team) :-
     goal_position(Other_team, BX, BY),
     format('~w Score a Goal!!', [Team]), !.
 
-    
+
+check_ball_out :-
+    ball(position(BX, BY)),
+    (BX = 0; BX = 1000; BY = 0; BY = 500).
+
+
+reset_field :-
+    retractall(ball_holder(_)),
+    retractall(ball(_)),
+    retractall(player(_,_,_,_,_)),
+    assertz(ball(position(500, 250))), % Reset to new center (Scaled)
+    assertz(player(p1, team1, forward, position(200, 250), stamina(100))),
+    assertz(player(p2, team1, forward, position(400, 300), stamina(100))),
+    assertz(player(p3, team1, defender, position(100, 120), stamina(100))),
+    assertz(player(p4, team1, goalkeeper, position(50, 250), stamina(100))),
+    assertz(player(p5, team2, forward, position(800, 250), stamina(100))),
+    assertz(player(p6, team2, forward, position(600, 200), stamina(100))),
+    assertz(player(p7, team2, defender, position(900, 200), stamina(100))),
+    assertz(player(p8, team2, goalkeeper, position(950, 250), stamina(100))).
+
+
+
+
 
 % Goalkeeper catches the ball if close enough.
 catch_ball(PlayerID) :-
@@ -210,6 +233,14 @@ catch_ball(PlayerID) :-
 
 % Simulate one round of the game. (Logic structure unchanged)
 simulate_round :-
+
+    % Check for goals
+    ((check_goal(team1) -> 
+        (reset_field) ; true); true),
+
+    ((check_goal(team2) -> 
+        (reset_field) ; true); true),
+
 
     forall(player(PlayerID,_,_,_,_),
        ( shoot(PlayerID); true )
