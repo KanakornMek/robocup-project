@@ -72,6 +72,7 @@ class SoccerSimulationApp:
     def draw_players(self):
         # Draw players (red for team 1, blue for team 2)
         for solution in prolog.query("player(ID, Team, Role, position(X, Y), _)"):
+            player_id = solution["ID"]
             team = solution["Team"]
             role = solution["Role"]
             x = solution["X"]
@@ -84,7 +85,7 @@ class SoccerSimulationApp:
             self.canvas.create_oval(cx - 10, cy - 10, cx + 10, cy + 10, fill=color)
 
             # Display the role text
-            self.canvas.create_text(cx, cy - 15, text=role, fill="black")
+            self.canvas.create_text(cx, cy - 15, text=(player_id+" "+role), fill="black")
 
     def draw_ball(self):
         # Get ball position and convert to GUI coordinates
