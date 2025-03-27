@@ -12,7 +12,13 @@ class SoccerSimulationApp:
         self.root.title("Prolog Soccer Simulation")
 
         # Canvas to draw the field and players
-        self.canvas = tk.Canvas(root, width=500, height=250, bg="white")
+        
+        field_size_query = list(prolog.query("field(size(W, H))"))
+        self.field_width = field_size_query[0]["W"]
+        self.field_height = field_size_query[0]["H"]
+        self.offset_x = 10
+        self.offset_y = 10
+        self.canvas = tk.Canvas(root, width=(self.field_width + 2*self.offset_x), height=(self.field_height + 2*self.offset_y), bg="white")
         self.canvas.pack()
 
         # Simulation controls
@@ -25,6 +31,7 @@ class SoccerSimulationApp:
 
         self.rounds = 0
         self.current_round = 0
+        self.update_gui()  # Initial GUI update
 
     def run_simulation(self):
         try:
@@ -67,7 +74,18 @@ class SoccerSimulationApp:
 
     def draw_field(self):
         # Draw the field (green rectangle)
-        self.canvas.create_rectangle(50, 25, 450, 225, fill="green", outline="black")
+        self.canvas.create_rectangle(self.offset_x, self.offset_y, self.field_width+self.offset_x, self.field_height+self.offset_y, fill="green", outline="black", width=2)
+
+        goal_height = 100
+        goal_width = 10
+        goal_center_y = self.field_height / 2
+        goal_top_y = goal_center_y - (goal_height / 2)
+
+        # Team 1 goal (left side)
+        self.canvas.create_rectangle(self.offset_x, self.offset_y + goal_top_y, self.offset_x + goal_width, goal_top_y + self.offset_y + goal_height, fill="white", outline="")
+
+        # Team 2 goal (right side)
+        self.canvas.create_rectangle(self.field_width + self.offset_x - goal_width, self.offset_y + goal_top_y, self.field_width + self.offset_x, goal_top_y + self.offset_y + goal_height, fill="white", outline="")
 
     def draw_players(self):
         # Draw players (red for team 1, blue for team 2)
@@ -78,14 +96,16 @@ class SoccerSimulationApp:
             x = solution["X"]
             y = solution["Y"]
 
-            # Convert Prolog field coordinates to GUI coordinates
-            cx, cy = self.convert_coords(x, y)
+            cx = self.offset_x + x
+            cy = self.offset_y + y
+
+            radius = 10
 
             color = "red" if team == "team1" else "blue"
-            self.canvas.create_oval(cx - 10, cy - 10, cx + 10, cy + 10, fill=color)
+            self.canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius, fill=color)
 
             # Display the role text
-            self.canvas.create_text(cx, cy - 15, text=(player_id+" "+role), fill="black")
+            self.canvas.create_text(cx, cy - (radius+5), text=(player_id+" "+role), fill="black")
 
     def draw_ball(self):
         # Get ball position and convert to GUI coordinates
@@ -93,8 +113,12 @@ class SoccerSimulationApp:
             x = solution["X"]
             y = solution["Y"]
 
-            cx, cy = self.convert_coords(x, y)
-            self.canvas.create_oval(cx - 8, cy - 8, cx + 8, cy + 8, fill="black")
+            radius = 8
+
+            cx = self.offset_x + x
+            cy = self.offset_y + y
+            self.canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius, fill="black")
+
 
     def convert_coords(self, x, y):
         # Convert the field coordinates to GUI canvas coordinates
