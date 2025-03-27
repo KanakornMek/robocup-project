@@ -36,20 +36,22 @@ update_ball_holder(Team, Role, X, Y) :-
 
 
 
-% Move towards the ball or to a strategic position
+% Move towards the ball
 move_towards_ball(Team, Role) :-
     player(Team, Role, position(X1, Y1), stamina(S)),
     ball(position(X2, Y2)),
-    (Role == forward -> 
-        (prioritize_offensive_move(XDiff, YDiff), 
-         move_to_open_space(Team, X1, Y1, NewX, NewY)) 
-        ; 
-        (XDiff is X2 - X1, YDiff is Y2 - Y1, normalize(XDiff, YDiff, DX, DY), NewX is X1 + DX, NewY is Y1 + DY)),
+    XDiff is X2 - X1,
+    YDiff is Y2 - Y1,
+    (Role == forward -> (prioritize_offensive_move(XDiff, YDiff), move_to_open_space(Team, X1, Y1, NewX, NewY)) ; true), % Forwards focus on the attack
+    normalize(XDiff, YDiff, DX, DY),
+    NewX is X1 + DX,
+    NewY is Y1 + DY,
     retract(player(Team, Role, position(X1, Y1), stamina(S))),
     assertz(player(Team, Role, position(NewX, NewY), stamina(S))),
     format('~w ~w moves to (~w, ~w)~n', [Team, Role, NewX, NewY]),
     % Update ball holder if near the ball
-    (abs(NewX - X2) =< 2, abs(NewY - Y2) =< 2 -> (update_ball_holder(Team, Role, NewX, NewY), format('~w holds the ball')) ; true), !.
+    (abs(NewX - X2) =< 2, abs(NewY - Y2) =< 2 -> (update_ball_holder(Team, Role, NewX, NewY), 
+    format('~w ~w holds the ball~n',[Team, Role])) ; true), !.
 
 % Prioritize attacking or intercepting for forwards
 prioritize_offensive_move(XDiff, YDiff) :-
@@ -62,7 +64,7 @@ move_to_open_space(Team, X1, Y1, NewX, NewY) :-
 
 % Find an open space away from enemies
 find_open_space(X1, Y1, EnemyPositions, NewX, NewY) :-
-    between(-20, 20, DX), between(-20, 20, DY), % Search within a 20-unit radius
+    between(-5, 5, DX), between(-5, 5, DY), % Search within a 5-unit radius
     NewX is X1 + DX, NewY is Y1 + DY,
     \+ is_near_enemy(NewX, NewY, EnemyPositions), !.
 
@@ -104,12 +106,12 @@ kick_ball(Team, Role) :-
 pass_ball(Team, Role) :-
     ball_holder(Team, Role), % Ensure that the player is holding the ball
     player(Team, Role, position(X1, Y1), _),
-    find_teammate_in_better_position(Team, X1, Y1, _, X2, Y2), % Find a teammate in a better position
+    player(Team, _, position(X2, Y2), _),
+    abs(X1 - X2) < 20, % Teammate within 20 units 
+    abs(Y1 - Y2) < 20, % Teammate within 20 units
     % Update ball holder to the new player
     retract(ball_holder(Team, Role)),
     assertz(ball_holder(Team, _)),
-    retract(ball(position(_, _))),
-    assertz(ball(position(X2, Y2))),
     format('~w ~w passes the ball to teammate at (~w, ~w)~n', [Team, Role, X2, Y2]).
 
 
@@ -155,10 +157,10 @@ simulate_round :-
     (pass_ball(team1, forward) ; true),
     (pass_ball(team2, forward) ; true),
     % Move all players
-    move_towards_ball(team1, forward),
-    move_towards_ball(team1, defender),
-    move_towards_ball(team2, forward),
-    move_towards_ball(team2, defender),
+    (move_towards_ball(team1, forward) ; true),
+    (move_towards_ball(team1, defender) ; true),
+    (move_towards_ball(team2, forward) ; true),
+    (move_towards_ball(team2, defender) ; true),
     % Goalkeepers attempt to catch.
     (catch_ball(team1, goalkeeper) ; true),
     (catch_ball(team2, goalkeeper) ; true),

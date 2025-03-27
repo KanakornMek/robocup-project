@@ -71,7 +71,7 @@ class SoccerSimulationApp:
 
     def draw_players(self):
         # Draw players (red for team 1, blue for team 2)
-        for solution in prolog.query("player(Team, Role, position(X, Y), _)"):
+        for solution in prolog.query("player(ID, Team, Role, position(X, Y), _)"):
             team = solution["Team"]
             role = solution["Role"]
             x = solution["X"]
