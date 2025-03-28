@@ -1,7 +1,6 @@
-
-
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
+:- dynamic score/2.
 
 % Define the soccer field dimensions.
 field(size(1000, 500)).
@@ -20,6 +19,9 @@ player(p5, team2, forward, position(800, 250), stamina(100)).
 player(p6, team2, forward, position(600, 200), stamina(100)).
 player(p7, team2, defender, position(900, 200), stamina(100)).
 player(p8, team2, goalkeeper, position(950, 250), stamina(100)).
+
+score(team1, 0).
+score(team2, 0).
 
 % Update the ball holder when a player has the ball
 update_ball_holder(PlayerID) :-
@@ -113,7 +115,7 @@ kick_ball(PlayerID) :-
     ball(position(X2, Y2)),
     ProximityThreshold is 20,
     abs(X1 - X2) =< ProximityThreshold, abs(Y1 - Y2) =< ProximityThreshold, % Scaled kicking range
-    goal_position(Team, GoalX, GoalY),
+    middle_goal_position(Team, GoalX, GoalY),
     XDiff is GoalX - X2,
     YDiff is GoalY - Y2,
     normalize(XDiff, YDiff, DX, DY), % Normalize direction
@@ -148,12 +150,77 @@ find_teammate_in_better_position(PlayerID, Team, X, Y, TeammateID, TeammateX, Te
 
 % Evaluate if a teammate is in a better position (e.g., closer to the goal)
 teammate_is_better_position(Team, X, _) :-
-    (Team == team1, goal_position(team1, GoalX, _), X < GoalX);  % For Team1, closer to the goal
-    (Team == team2, goal_position(team2, GoalX, _), X > GoalX).  % For Team2, closer to the goal
+    (Team == team1, middle_goal_position(team1, GoalX, _), X < GoalX);  % For Team1, closer to the goal
+    (Team == team2, middle_goal_position(team2, GoalX, _), X > GoalX).  % For Team2, closer to the goal
+
+
+distance(X, Y, L) :-
+    L is sqrt((X**2) + (Y**2)).
 
 % Goal position depending on the team.
-goal_position(team1, 0, 250).
-goal_position(team2, 1000, 250).
+goal_position(team1, 0, X) :-
+    X >= 200,
+    X =< 300.
+goal_position(team2, 1000, X) :-
+    X >= 200,
+    X =< 300.
+
+middle_goal_position(team1, 0, 250).
+middle_goal_position(team2, 1000, 250).
+
+get_other_team(team1, team2).
+get_other_team(team2, team1).
+
+
+shoot(PlayerID) :-
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    ball_holder(PlayerID),
+    get_other_team(Team, Other_team),
+    middle_goal_position(Other_team, GX, GY),
+    ball(position(X2, Y2)),
+    DX is abs(X - GX),
+    DY is abs(Y - GY),
+    distance(DX, DY, L),
+    L =< 500,
+    random(190, 310, RY),
+    retract(ball(position(X2, Y2))),
+    assertz(ball(position(GX, RY))),
+    format('~w ~w ~w shoot the ball to (~w, ~w)~n', [PlayerID, Team, Role, GX, RY]), !.
+    
+
+check_goal(Team) :-
+    ball(position(BX, BY)),
+    get_other_team(Team, Other_team),
+    goal_position(Other_team, BX, BY),
+    score(Team, S),
+    Snew is S+1,
+    retract(score(Team, S)),
+    assertz(score(Team, Snew)),
+    format('~w Score a Goal!! score ~w', [Team, Snew]), !.
+
+
+check_ball_out :-
+    ball(position(BX, BY)),
+    (BX = 0; BX = 1000; BY = 0; BY = 500).
+
+
+reset_field :-
+    retractall(ball_holder(_)),
+    retractall(ball(_)),
+    retractall(player(_,_,_,_,_)),
+    assertz(ball(position(500, 250))), % Reset to new center (Scaled)
+    assertz(player(p1, team1, forward, position(200, 250), stamina(100))),
+    assertz(player(p2, team1, forward, position(400, 300), stamina(100))),
+    assertz(player(p3, team1, defender, position(100, 120), stamina(100))),
+    assertz(player(p4, team1, goalkeeper, position(50, 250), stamina(100))),
+    assertz(player(p5, team2, forward, position(800, 250), stamina(100))),
+    assertz(player(p6, team2, forward, position(600, 200), stamina(100))),
+    assertz(player(p7, team2, defender, position(900, 200), stamina(100))),
+    assertz(player(p8, team2, goalkeeper, position(950, 250), stamina(100))).
+
+
+
+
 
 % Goalkeeper catches the ball if close enough.
 catch_ball(PlayerID) :-
@@ -171,6 +238,19 @@ catch_ball(PlayerID) :-
 
 % Simulate one round of the game. (Logic structure unchanged)
 simulate_round :-
+
+    % Check for goals
+    ((check_goal(team1) -> 
+        (reset_field) ; true); true),
+
+    ((check_goal(team2) -> 
+        (reset_field) ; true); true),
+
+
+    forall(player(PlayerID,_,_,_,_),
+       ( shoot(PlayerID); true )
+    ; true ),
+
     % Ball Holder Actions first (Pass)
     ( ball_holder(HolderID) ->
         ( (pass_ball(HolderID); true) )
@@ -189,9 +269,9 @@ simulate_round :-
     format('Ball is now at (~w, ~w)~n', [BX, BY]).
 
 run_simulation(0).
+
 run_simulation(N) :-
     N > 0,
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
-
