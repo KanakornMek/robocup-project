@@ -402,7 +402,7 @@ tackle :-
         nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
         random(RandomNumber),
         format('Random ~w~n', [RandomNumber]),
-        (RandomNumber > 0.3 -> (
+        (RandomNumber > 0.6 -> (
             update_ball_holder(TackleID),
             retract(tackle_cooldown(_)),
             assertz(tackle_cooldown(20)),
