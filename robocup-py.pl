@@ -181,6 +181,58 @@ update_player_position(PlayerID, NewX, NewY) :-
         assertz(ball(position(ClampedX, ClampedY)))
     ; true ).
 
+% Find out why we need cuts here !?!???!?
+update_player_stamina(PlayerID, Stamina) :-
+    player(PlayerID, Team, Role, position(X, Y), _Stamina),
+    retract(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(X, Y), stamina(Stamina))),
+    !.
+
+regenerate_player_stamina(PlayerID, StaminaPerSec) :-
+    player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    Sn is S+StaminaPerSec,
+    update_player_stamina(PlayerID, Sn),
+    !.
+
+move_player(PlayerID,TargetX,TargetY,Speed) :-
+    % Calculate stamina usage
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    StaminaRampThreshold is 5,
+    StaminaPerSpeed is 0.2,
+    ((Speed>StaminaRampThreshold)->
+        StaminaUsage is StaminaPerSpeed*(Speed-StaminaRampThreshold)
+    ; StaminaUsage is 0),
+    StaminaLeft is S-StaminaUsage,
+    ((StaminaUsage>S)->
+        (
+        ((S>StaminaRampThreshold)->
+            %ClampedSpeed is (StaminaUsage/StaminaPerSpeed)+StaminaRampThreshold
+            ClampedSpeed is (S/StaminaPerSpeed)+StaminaRampThreshold
+        ; ClampedSpeed is StaminaRampThreshold)
+        )
+    ; ClampedSpeed is Speed),
+    ((StaminaUsage>S)->
+        Sn is 0
+    ; Sn is StaminaLeft),
+    Dx is TargetX-X,
+    Dy is TargetY-Y,
+    normalize(Dx,Dy,NormX,NormY),
+    Dxn is NormX*ClampedSpeed,
+    Dyn is NormY*ClampedSpeed,
+    NewX is X+Dxn,
+    NewY is Y+Dyn,
+    % Ensure within bounds
+    field(size(MaxX, MaxY)),
+    clamp(NewX, 0, MaxX, ClampedX), 
+    clamp(NewY, 0, MaxY, ClampedY),
+    retractall(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(ClampedX, ClampedY), stamina(Sn))),
+    % If this player is the ball holder, move the ball too
+    ( ball_holder(PlayerID) ->
+        ball(position(X,Y),velocity(Vx,Vy),acceleration(Ax,Ay)),
+        retractall(ball(_,_,_)),
+        assertz(ball(position(ClampedX, ClampedY),velocity(Vx,Vy),acceleration(Ax,Ay)))
+    ; true ).
 
 % --- Actions for Player WITH Ball ---
 
