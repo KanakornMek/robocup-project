@@ -4,24 +4,20 @@
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
+:- dynamic tackle_cooldown/1.
 
 % --- Core Game Data ---
 
 % Define the soccer field dimensions.
-% field(Size).
-% Field with field size Size.
-% size(Width, Height).
-% Size of Width wide and Height high.
 field(size(1000, 500)).
 
 % Define the ball's initial position.
-% ball(Position).
-% Ball at position Position.
 ball(position(500, 250)).
 
+% Tackle Cooldown
+tackle_cooldown(0).
+
 % Define player positions and states.
-% player(PlayerID, Team, Role, AtPosition, Stamina).
-% Player with player ID PlayerID, in team Team with role Role, at position At Position, having stamina Stamina.
 % Team 1 players:
 player(p1, team1, forward, position(200, 250), stamina(100)).
 player(p2, team1, forward, position(500, 300), stamina(100)). % Adjusted starting pos for testing
@@ -49,12 +45,12 @@ goal_position(team2, 1000, Y) :- Y >= 200, Y =< 300. % Right goal
 middle_goal_position(team1, 0, 250).    % Left goal center
 middle_goal_position(team2, 1000, 250). % Right goal center
 
-euclidean_distance(X1, Y1, X2, Y2, L) :-
+distance(X1, Y1, X2, Y2, L) :-
     DX is X1 - X2,
     DY is Y1 - Y2,
     L is sqrt((DX**2) + (DY**2)).
 
-taxicab_distance(X1, Y1, X2, Y2, L) :- bfv
+taxicab_distance(X1, Y1, X2, Y2, L) :-
     DX is abs(X1 - X2),
     DY is abs(Y1 - Y2),
     L is DX + DY.
@@ -73,7 +69,7 @@ clamp(Value, Min, Max, ClampedValue) :-
 is_near_opponent(X, Y, MyTeam, Threshold) :-
     get_other_team(MyTeam, OpponentTeam),
     player(_, OpponentTeam, _, position(OppX, OppY), _),
-    euclidean_distance(X, Y, OppX, OppY, Dist),
+    distance(X, Y, OppX, OppY, Dist),
     Dist =< Threshold,
     !. % Cut: Found one nearby opponent, no need to check others
 
@@ -136,7 +132,7 @@ decide_action_with_ball(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    euclidean_distance(X, Y, GoalX, GoalY, DistToGoal),
+    distance(X, Y, GoalX, GoalY, DistToGoal),
 
     % 1. Shoot if close enough?
     ( DistToGoal =< 200, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
@@ -171,17 +167,17 @@ shoot(PlayerID) :-
 find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    PassRange is 300, % Max pass euclidean_distance
+    PassRange is 300, % Max pass distance
 
     % Find all valid teammates within range, closer to goal, and relatively open
     findall(
         Score-TeammateID,
         (   player(TeammateID, Team, _, position(TX, TY), _),
             TeammateID \= PlayerID, % Not the player themselves
-            euclidean_distance(X, Y, TX, TY, DistToTeammate),
+            distance(X, Y, TX, TY, DistToTeammate),
             DistToTeammate =< PassRange, % Within pass range
-            euclidean_distance(X, Y, GoalX, GoalY, MyDistToGoal),
-            euclidean_distance(TX, TY, GoalX, GoalY, TeammateDistToGoal),
+            distance(X, Y, GoalX, GoalY, MyDistToGoal),
+            distance(TX, TY, GoalX, GoalY, TeammateDistToGoal),
             TeammateDistToGoal < MyDistToGoal, % Teammate is closer to goal
             \+ is_near_opponent(TX, TY, Team, 30), % Teammate is relatively open (check 30 unit radius)
             % Score: Lower is better (closer to goal is main factor)
@@ -254,8 +250,8 @@ find_open_space_towards_goal(X1, Y1, MyTeam, GoalX, GoalY, SearchRadius, FoundX,
             CandY >= 0, CandY =< MaxY,
             % Check if space is clear of opponents
             \+ is_near_opponent(CandX, CandY, MyTeam, 20),
-            % Score based on euclidean_distance to goal
-            euclidean_distance(CandX, CandY, GoalX, GoalY, DistToGoal),
+            % Score based on distance to goal
+            distance(CandX, CandY, GoalX, GoalY, DistToGoal),
             DistScore = DistToGoal
         ),
         Candidates
@@ -352,7 +348,7 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
 move_towards_ball_basic(PlayerID) :-
     player(PlayerID, Team, Role, position(X1, Y1), _),
     ball(position(X2, Y2)),
-    euclidean_distance(X1,Y1, X2,Y2, DistToBall),
+    distance(X1,Y1, X2,Y2, DistToBall),
     ProximityThreshold is 20,
 
     ( DistToBall =< ProximityThreshold ->
@@ -375,7 +371,7 @@ catch_ball(PlayerID) :-
     ball(position(BX, BY)),
     \+ ball_holder(_), % Only catch if ball is loose after a shot
     CatchRange is 30,
-    euclidean_distance(X, Y, BX, BY, Dist),
+    distance(X, Y, BX, BY, Dist),
     Dist =< CatchRange,
     middle_goal_position(Team, GoalX, _),
     ( (Team == team1, BX < 100) ; (Team == team2, BX > 900) ),
@@ -383,6 +379,45 @@ catch_ball(PlayerID) :-
     update_ball_holder(PlayerID),  % Update ball holder to goalkeeper
     !.
 
+% Try to Tackle player with ball and steal ball (has random chance of unsuccess)
+tackle :-
+    % Find all player around the ball with proximity = 20
+    findall(player(PlayerID, _, _, _, _),(
+        player(PlayerID, _, _, position(PX, PY), _),
+        ball(position(X, Y)),
+        ball_holder(HolderID),
+        PlayerID \= HolderID,
+        XDiff is PX - X,
+        YDiff is PY - Y,
+        D is XDiff**2 + YDiff**2,
+        D < 2500,
+        format('Tackle: ~w is in range~n',[PlayerID])
+    ), PlayerNearby),
+    ball_holder(PlayerID),
+    player(PlayerID, _, _, _, _),
+    % Random a player from the list
+    length(PlayerNearby, L),
+    format('Tackle: ~w is being tackled with ~w people attacking~n',[PlayerID, L]),
+
+    (L > 0 -> (
+        random(0, L, RandomIndex),
+        nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
+        random(RandomNumber),
+        format('Random ~w~n', [RandomNumber]),
+        (RandomNumber > 0.6 -> (
+            update_ball_holder(TackleID),
+            retract(tackle_cooldown(_)),
+            assertz(tackle_cooldown(20)),
+            format('~w got the ball~n', [TackleID])
+        ); true)
+    ); true),
+    !.
+
+update_cooldown:-
+    tackle_cooldown(C),
+    C1 is C - 1,
+    retract(tackle_cooldown(_)),
+    assertz(tackle_cooldown(C1)).
 
 check_goal(TeamScored) :-
     ball(position(BX, BY)),
@@ -450,6 +485,9 @@ simulate_round :-
                   )
             )
         ),
+
+        % Tackle
+        ( (tackle_cooldown(C), C>0) -> (update_cooldown, format('Cooldown ~w~n', [C])) ; tackle),
 
         % Goalkeepers attempt to catch (if ball is loose near them)
         ( catch_ball(p4) ; true ), 
