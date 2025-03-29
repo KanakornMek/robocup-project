@@ -2,6 +2,7 @@
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
+:- dynamic tackle_cooldown/1.
 
 % --- Core Game Data ---
 
@@ -10,6 +11,9 @@ field(size(1000, 500)).
 
 % Define the ball's initial position.
 ball(position(500, 250)).
+
+% Tackle Cooldown
+tackle_cooldown(0).
 
 % Define player positions and states.
 % Team 1 players:
@@ -43,6 +47,11 @@ distance(X1, Y1, X2, Y2, L) :-
     DX is X1 - X2,
     DY is Y1 - Y2,
     L is sqrt((DX**2) + (DY**2)).
+
+taxicab_distance(X1, Y1, X2, Y2, L) :-
+    DX is abs(X1 - X2),
+    DY is abs(Y1 - Y2),
+    L is DX + DY.
 
 normalize(DX1, DY1, DX, DY) :-
     L is sqrt(DX1**2 + DY1**2),
@@ -368,6 +377,45 @@ catch_ball(PlayerID) :-
     update_ball_holder(PlayerID),  % Update ball holder to goalkeeper
     !.
 
+% Try to Tackle player with ball and steal ball (has random chance of unsuccess)
+tackle :-
+    % Find all player around the ball with proximity = 20
+    findall(player(PlayerID, _, _, _, _),(
+        player(PlayerID, _, _, position(PX, PY), _),
+        ball(position(X, Y)),
+        ball_holder(HolderID),
+        PlayerID \= HolderID,
+        XDiff is PX - X,
+        YDiff is PY - Y,
+        D is XDiff**2 + YDiff**2,
+        D < 2500,
+        format('Tackle: ~w is in range~n',[PlayerID])
+    ), PlayerNearby),
+    ball_holder(PlayerID),
+    player(PlayerID, _, _, _, _),
+    % Random a player from the list
+    length(PlayerNearby, L),
+    format('Tackle: ~w is being tackled with ~w people attacking~n',[PlayerID, L]),
+
+    (L > 0 -> (
+        random(0, L, RandomIndex),
+        nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
+        random(RandomNumber),
+        format('Random ~w~n', [RandomNumber]),
+        (RandomNumber > 0.3 -> (
+            update_ball_holder(TackleID),
+            retract(tackle_cooldown(_)),
+            assertz(tackle_cooldown(20)),
+            format('~w got the ball~n', [TackleID])
+        ); true)
+    ); true),
+    !.
+
+update_cooldown:-
+    tackle_cooldown(C),
+    C1 is C - 1,
+    retract(tackle_cooldown(_)),
+    assertz(tackle_cooldown(C1)).
 
 check_goal(TeamScored) :-
     ball(position(BX, BY)),
@@ -435,6 +483,9 @@ simulate_round :-
                   )
             )
         ),
+
+        % Tackle
+        ( (tackle_cooldown(C), C>0) -> (update_cooldown, format('Cooldown ~w~n', [C])) ; tackle),
 
         % Goalkeepers attempt to catch (if ball is loose near them)
         ( catch_ball(p4) ; true ), 
