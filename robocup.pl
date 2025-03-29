@@ -137,6 +137,7 @@ decide_action_with_ball(PlayerID) :-
     ).
 decide_action_with_ball(_). % If none of the above, do nothing this tick
 
+%Helper: calculate distance between Point(A) and a line created by point(B1 and B2).
 distance_between_point_and_line(AX, AY, BX1, BY1, BX2, BY2, D, IX, IY) :-
     D1 is abs((BY2 - BY1)*AX - (BX2 - BX1)*AY + (BX2*BY1 - BX1*BY2)),
     L is sqrt((BY2 - BY1) ** 2 + (BX2 - BX1) ** 2),
@@ -145,7 +146,7 @@ distance_between_point_and_line(AX, AY, BX1, BY1, BX2, BY2, D, IX, IY) :-
     IY is BY1 + Lambda * (BY2 - BY1),
     D is D1 / L.
 
-% Helper: Shoot the ball towards the opponent's goal center
+% Helper: Shoot the ball towards the opponent's goal
 shoot(PlayerID) :-
     ball_holder(PlayerID), % Ensure player still has ball
     player(PlayerID, Team, Role, position(X, Y), _),
