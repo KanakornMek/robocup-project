@@ -1,9 +1,12 @@
 % :- assertz(file_search_path(library,pce('prolog/lib'))). % Keep if needed for your setup
 :- use_module(library(pce)).
 
-:- dynamic field/1, ball/1, player/5.
+:- dynamic field/1, ball/3, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
+
+%temp
+:- dynamic ball/1.
 
 % --- Core Game Data ---
 
@@ -18,6 +21,7 @@ field(size(1000, 500)).
 % ball(Position).
 % Ball at position Position.
 ball(position(500, 250)).
+ball(position(500, 250),velocity(0,0),acceleration(0,0)).
 
 % Define player positions and states.
 % player(PlayerID, Team, Role, AtPosition, Stamina).
@@ -54,7 +58,7 @@ euclidean_distance(X1, Y1, X2, Y2, L) :-
     DY is Y1 - Y2,
     L is sqrt((DX**2) + (DY**2)).
 
-taxicab_distance(X1, Y1, X2, Y2, L) :- bfv
+taxicab_distance(X1, Y1, X2, Y2, L) :-
     DX is abs(X1 - X2),
     DY is abs(Y1 - Y2),
     L is DX + DY.
@@ -100,6 +104,54 @@ find_open_space(X1, Y1, MyTeam, SearchRadius, FoundX, FoundY) :-
 % Default if no suitable open space found nearby
 find_open_space(X, Y, _, _, X, Y).
 
+
+% --- Ball Physics Management ---
+
+% ball syntax
+% ball(position(500, 250),velocity(0,0),acceleration(0,0)).
+
+update_ball_position(X, Y) :-
+    ball(position(_X, _Y),velocity(Ux, Uy),acceleration(Ax, Ay)),
+    retractall(ball(_, _, _)),
+    assertz(ball(position(X, Y),velocity(Ux, Uy),acceleration(Ax, Ay))).
+
+update_ball_velocity(Vx, Vy) :-
+    ball(position(X, Y),velocity(_Ux, _Uy),acceleration(Ax, Ay)),
+    retractall(ball(_, _, _)),
+    assertz(ball(position(X, Y),velocity(Vx, Vy),acceleration(Ax, Ay))).
+
+update_ball_acceleration(Ax, Ay) :-
+    ball(position(X, Y),velocity(Ux, Uy),acceleration(_Ax, _Ay)),
+    retractall(ball(_, _, _)),
+    assertz(ball(position(X, Y),velocity(Ux, Uy),acceleration(Ax, Ay))).
+  
+stop_ball :-
+    update_ball_velocity(0,0).
+    
+get_update_displacement(Xn, Yn, T):-
+    ball(position(X,Y),velocity(Ux,Uy),acceleration(Ax,Ay)),
+    Xn is (Ux*T)+(0.5*Ax*(T**2)),
+    Yn is (Uy*T)+(0.5*Ay*(T**2)).
+
+get_update_velocity(Vx, Vy, T) :-
+    ball(position(X,Y),velocity(Ux,Uy),acceleration(Ax,Ay)),
+    Vx is Ux+(Ax*T),
+    Vy is Uy+(Ay*T).
+
+get_update_ball(Xn,Yn,Vx,Vy,T) :-
+    ball(position(X,Y),velocity(Ux,Uy),acceleration(Ax,Ay)),
+    get_update_displacement(Dx,Dy,T),
+    get_update_velocity(Vx,Vy,T),
+    Xn is X+Dx,
+    Yn is Y+Dy,
+    update_ball_position(Xn,Yn),
+    update_ball_velocity(Vx,Vy).
+
+physics_update_ball(T) :- 
+    get_update_ball(Xn,Yn,Vx,Vy,T),
+    update_ball_position(Xn,Yn),
+    update_ball_velocity(Vx,Vy),
+    format('The ball is now at (~w, ~w)~n with velocity (~w, ~w)~n', [Xn, Yn, Vx, Vy]).
 
 % --- Ball Holder Management ---
 
