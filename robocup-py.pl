@@ -1,4 +1,3 @@
-
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
