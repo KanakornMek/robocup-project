@@ -518,7 +518,7 @@ reset_field :-
 
 simulate_round :-
     %Check for goals or out of bounds
-    ( check_goal(team1) ; check_goal(team2) ; check_ball_out ->
+    (( check_goal(team1) ; check_goal(team2) ; check_ball_out ->
         true % skip rest of the logic
     ;
         % Decide action for ball holder 
@@ -552,7 +552,7 @@ simulate_round :-
         ball(position(BX, BY)),
         format('Ball is at (~1f, ~1f)~n', [BX, BY])
     ),
-    !.
+    !; true).
 
 
 run_simulation(0).
