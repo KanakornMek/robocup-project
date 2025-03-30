@@ -107,10 +107,6 @@ find_open_space(X, Y, _, _, X, Y).
 
 % --- Ball Physics Management ---
 
-% ball syntax
-
-% ball(position(500, 250),velocity(0,0),acceleration(0,0)).
-
 update_ball_position(X, Y) :-
     ball(position(_X, _Y),velocity(Ux, Uy),acceleration(Ax, Ay)),
     retractall(ball(_, _, _)),
