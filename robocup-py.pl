@@ -479,8 +479,8 @@ check_goal(TeamScored) :-
     Snew is S + 1,
     retract(score(TeamScored, S)),
     assertz(score(TeamScored, Snew)),
-    format('GOAL!!! ~w scores! Score: Team1 ~w - Team2 ~w~n', [TeamScored, S1, S2]),
     score(team1, S1), score(team2, S2), % Get updated scores for message
+    format('GOAL!!! ~w scores! Score: Team1 ~w - Team2 ~w~n', [TeamScored, S1, S2]),
     reset_field, % Reset positions after goal
     !.
 
