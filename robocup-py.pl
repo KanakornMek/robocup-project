@@ -150,11 +150,20 @@ decide_action_with_ball(PlayerID) :-
     ).
 decide_action_with_ball(_). % If none of the above, do nothing this tick
 
+distance_between_point_and_line(AX, AY, BX1, BY1, BX2, BY2, D, IX, IY) :-
+    D1 is abs((BY2 - BY1)*AX - (BX2 - BX1)*AY + (BX2*BY1 - BX1*BY2)),
+    L is sqrt((BY2 - BY1) ** 2 + (BX2 - BX1) ** 2),
+    Lambda is ((AX - BX1) * (BX2 - BX1) + (AY - BY1) * (BY2 - BY1)) / ((BX2 - BX1) ** 2 + (BY2 - BY1) ** 2),
+    IX is BX1 + Lambda * (BX2 - BX1),
+    IY is BY1 + Lambda * (BY2 - BY1),
+    D is D1 / L.
+
 % Helper: Shoot the ball towards the opponent's goal center
 shoot(PlayerID) :-
     ball_holder(PlayerID), % Ensure player still has ball
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
+    player(GKID, OpponentTeam, goalkeeper, position(GKX, GKY), _),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     % Add slight randomness to shot direction
     random_between(-30, 30, RandY), % Random offset for Y
@@ -162,9 +171,17 @@ shoot(PlayerID) :-
     field(size(_, MaxY)),
     clamp(TargetY, 0, MaxY, ClampedTargetY), % Clamp target Y within field bounds
 
-    retractall(ball(_)),
-    assertz(ball(position(GoalX, ClampedTargetY))), % Ball instantly moves to goal line target
-    clear_ball_holder, % Player no longer has the ball after shooting
+    distance_between_point_and_line(GKX, GKY, X, Y, GoalX, ClampedTargetY, D, IX, IY),
+    (D < 10 -> 
+        (retractall(ball(_)),
+        retract(player(GKID, _, _, _, _)),
+        assertz(ball(position(IX, IY))), % Ball instantly moves to goal line target
+        assertz(player(GKID, OpponentTeam, goalkeeper, position(IX, IY), stamina(100))),
+        update_ball_holder(GKID));
+        (retractall(ball(_)),
+        assertz(ball(position(GoalX, ClampedTargetY))), % Ball instantly moves to goal line target
+        clear_ball_holder)% Player no longer has the ball after shooting
+    ), % Player no longer has the ball after shooting
     format('~w (~w ~w) SHOOTS towards (~w, ~w)!~n', [PlayerID, Team, Role, GoalX, ClampedTargetY]).
 
 % Helper: Find the best teammate to pass to
@@ -439,7 +456,7 @@ tackle :-
         nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
         random(RandomNumber),
         format('Random ~w~n', [RandomNumber]),
-        (RandomNumber > 0.75 -> (
+        (RandomNumber > 0.99 -> (
             update_ball_holder(TackleID),
             retract(tackle_cooldown(_)),
             assertz(tackle_cooldown(10)),
