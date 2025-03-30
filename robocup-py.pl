@@ -445,18 +445,17 @@ tackle :-
         D < 900,
         format('Tackle: ~w is in range~n',[PlayerID])
     ), PlayerNearby),
-    ball_holder(PlayerID),
-    player(PlayerID, _, _, _, _),
-    % Random a player from the list
+
     length(PlayerNearby, L),
-    format('Tackle: ~w is being tackled with ~w people attacking~n',[PlayerID, L]),
 
     (L > 0 -> (
+        ball_holder(HolderID),
+        format('Tackle: ~w is being tackled with ~w people attacking~n',[HolderID, L]),
         random(0, L, RandomIndex),
         nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
         random(RandomNumber),
         format('Random ~w~n', [RandomNumber]),
-        (RandomNumber > 0.99 -> (
+        (RandomNumber > 0.80 -> (
             update_ball_holder(TackleID),
             retract(tackle_cooldown(_)),
             assertz(tackle_cooldown(10)),
@@ -558,3 +557,4 @@ run_simulation(N) :-
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
+    % Should we add cut so that it does not continue to be false after a true simulate_round

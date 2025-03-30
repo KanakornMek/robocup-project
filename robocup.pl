@@ -448,18 +448,17 @@ tackle :-
         D < 900,
         format('Tackle: ~w is in range~n',[PlayerID])
     ), PlayerNearby),
-    ball_holder(PlayerID),
-    player(PlayerID, _, _, _, _),
-    % Random a player from the list
+
     length(PlayerNearby, L),
-    format('Tackle: ~w is being tackled with ~w people attacking~n',[PlayerID, L]),
 
     (L > 0 -> (
+        ball_holder(HolderID),
+        format('Tackle: ~w is being tackled with ~w people attacking~n',[HolderID, L]),
         random(0, L, RandomIndex),
         nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
         random(RandomNumber),
         format('Random ~w~n', [RandomNumber]),
-        (RandomNumber > 0.99 -> (
+        (RandomNumber > 0.80 -> (
             update_ball_holder(TackleID),
             retract(tackle_cooldown(_)),
             assertz(tackle_cooldown(10)),
@@ -518,7 +517,7 @@ reset_field :-
 
 simulate_round :-
     %Check for goals or out of bounds
-    (( check_goal(team1) ; check_goal(team2) ; check_ball_out ->
+    ( check_goal(team1) ; check_goal(team2) ; check_ball_out ->
         true % skip rest of the logic
     ;
         % Decide action for ball holder 
@@ -552,7 +551,7 @@ simulate_round :-
         ball(position(BX, BY)),
         format('Ball is at (~1f, ~1f)~n', [BX, BY])
     ),
-    !; true).
+    !.
 
 
 run_simulation(0).
