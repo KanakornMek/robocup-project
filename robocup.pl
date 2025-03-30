@@ -5,7 +5,7 @@
 :- dynamic ball_holder/1.
 :- dynamic score/2.
 
-%temp
+% temp ForLater
 :- dynamic ball/1.
 
 % --- Core Game Data ---
@@ -108,6 +108,7 @@ find_open_space(X, Y, _, _, X, Y).
 % --- Ball Physics Management ---
 
 % ball syntax
+
 % ball(position(500, 250),velocity(0,0),acceleration(0,0)).
 
 update_ball_position(X, Y) :-
@@ -126,7 +127,8 @@ update_ball_acceleration(Ax, Ay) :-
     assertz(ball(position(X, Y),velocity(Ux, Uy),acceleration(Ax, Ay))).
   
 stop_ball :-
-    update_ball_velocity(0,0).
+    update_ball_velocity(0,0),
+    update_ball_acceleration(0,0).
     
 get_update_displacement(Xn, Yn, T):-
     ball(position(X,Y),velocity(Ux,Uy),acceleration(Ax,Ay)),
@@ -138,20 +140,45 @@ get_update_velocity(Vx, Vy, T) :-
     Vx is Ux+(Ax*T),
     Vy is Uy+(Ay*T).
 
-get_update_ball(Xn,Yn,Vx,Vy,T) :-
+get_friction_acceleration(Axn, Ayn):-
+    KineticFrictionCoef is 0.2,
+    Gravity is 10,
     ball(position(X,Y),velocity(Ux,Uy),acceleration(Ax,Ay)),
+    normalize(Ux,Uy,NormX,NormY),
+    Dax is NormX*(KineticFrictionCoef*Gravity),
+    Day is NormY*(KineticFrictionCoef*Gravity),
+    Axn is Ax-Dax,
+    Ayn is Ay-Day.
+
+get_update_ball(Xn,Yn,Vx,Vy,Axn,Ayn,T) :-
+    ball(position(X,Y),velocity(Ux,Uy),acceleration(Ax,Ay)),
+    %Check if ball will stop in this loop
+    ((Ax == 0)->
+        StopTime is 0
+    ;StopTime is -Ux/Ax),
+    ((StopTime<1)->
+    get_update_displacement(Dx,Dy,StopTime),
+    Xn is X+Dx,
+    Yn is Y+Dy,
+    Vx is 0, % Velocity should end up at zero but there could be some floating point error
+    Vy is 0,
+    Axn is 0, % Remove acceleration from friction if ball stops
+    Ayn is 0
+    ;
     get_update_displacement(Dx,Dy,T),
     get_update_velocity(Vx,Vy,T),
     Xn is X+Dx,
     Yn is Y+Dy,
-    update_ball_position(Xn,Yn),
-    update_ball_velocity(Vx,Vy).
+    Axn is Ax,
+    Ayn is Ay
+    ).
 
 physics_update_ball(T) :- 
-    get_update_ball(Xn,Yn,Vx,Vy,T),
+    get_update_ball(Xn,Yn,Vx,Vy,Ax,Ay,T),
     update_ball_position(Xn,Yn),
     update_ball_velocity(Vx,Vy),
-    format('The ball is now at (~w, ~w)~n with velocity (~w, ~w)~n', [Xn, Yn, Vx, Vy]).
+    update_ball_acceleration(Ax,Ay),
+    format('The ball is now at (~w, ~w)~n with velocity (~w, ~w)~n and acceleration (~w, ~w)~n', [Xn, Yn, Vx, Vy, Ax, Ay]).
 
 % --- Ball Holder Management ---
 
@@ -165,6 +192,39 @@ update_ball_holder(PlayerID) :-
 
 clear_ball_holder :-
     retractall(ball_holder(_)).
+
+kick_ball(PlayerID, TargetX, TargetY, Speed) :-
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    StaminaRampThreshold is 5,
+    StaminaPerSpeed is 0.2,
+    ((Speed>StaminaRampThreshold)->
+        StaminaUsage is StaminaPerSpeed*(Speed-StaminaRampThreshold)
+    ; StaminaUsage is 0),
+    StaminaLeft is S-StaminaUsage,
+    ((StaminaUsage>S)->
+        (
+        ((S>StaminaRampThreshold)->
+            ClampedSpeed is (S/StaminaPerSpeed)+StaminaRampThreshold
+        ; ClampedSpeed is StaminaRampThreshold)
+        )
+    ; ClampedSpeed is Speed),
+    ((StaminaUsage>S)->
+        Sn is 0
+    ; Sn is StaminaLeft),
+    ball_holder(PlayerID),
+    clear_ball_holder,
+    assertz(ball_holder(none)),
+    Dx is TargetX-X,
+    Dy is TargetY-Y,
+    normalize(Dx,Dy,NormX,NormY),
+    Vx is NormX*ClampedSpeed,
+    Vy is NormY*ClampedSpeed,
+    update_ball_velocity(Vx,Vy),
+    get_friction_acceleration(Ax,Ay),
+    update_ball_acceleration(Ax,Ay),
+    update_ball_position(X,Y),
+    retractall(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(X, Y), stamina(Sn))).
 
 % --- Player State Update ---
 
@@ -181,6 +241,57 @@ update_player_position(PlayerID, NewX, NewY) :-
         assertz(ball(position(ClampedX, ClampedY)))
     ; true ).
 
+% Find out why we need cuts here !?!???!?
+update_player_stamina(PlayerID, Stamina) :-
+    player(PlayerID, Team, Role, position(X, Y), _Stamina),
+    retract(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(X, Y), stamina(Stamina))),
+    !.
+
+regenerate_player_stamina(PlayerID, StaminaPerSec) :-
+    player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    Sn is S+StaminaPerSec,
+    update_player_stamina(PlayerID, Sn),
+    !.
+
+move_player(PlayerID,TargetX,TargetY,Speed) :-
+    % Calculate stamina usage
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    StaminaRampThreshold is 5,
+    StaminaPerSpeed is 0.2,
+    ((Speed>StaminaRampThreshold)->
+        StaminaUsage is StaminaPerSpeed*(Speed-StaminaRampThreshold)
+    ; StaminaUsage is 0),
+    StaminaLeft is S-StaminaUsage,
+    ((StaminaUsage>S)->
+        (
+        ((S>StaminaRampThreshold)->
+            ClampedSpeed is (S/StaminaPerSpeed)+StaminaRampThreshold
+        ; ClampedSpeed is StaminaRampThreshold)
+        )
+    ; ClampedSpeed is Speed),
+    ((StaminaUsage>S)->
+        Sn is 0
+    ; Sn is StaminaLeft),
+    Dx is TargetX-X,
+    Dy is TargetY-Y,
+    normalize(Dx,Dy,NormX,NormY),
+    Dxn is NormX*ClampedSpeed,
+    Dyn is NormY*ClampedSpeed,
+    NewX is X+Dxn,
+    NewY is Y+Dyn,
+    % Ensure within bounds
+    field(size(MaxX, MaxY)),
+    clamp(NewX, 0, MaxX, ClampedX), 
+    clamp(NewY, 0, MaxY, ClampedY),
+    retractall(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(ClampedX, ClampedY), stamina(Sn))),
+    % If this player is the ball holder, move the ball too
+    ( ball_holder(PlayerID) ->
+        ball(position(X,Y),velocity(Vx,Vy),acceleration(Ax,Ay)),
+        retractall(ball(_,_,_)),
+        assertz(ball(position(ClampedX, ClampedY),velocity(Vx,Vy),acceleration(Ax,Ay)))
+    ; true ).
 
 % --- Actions for Player WITH Ball ---
 
@@ -520,7 +631,6 @@ run_simulation(N) :-
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
-
 
 :- pce_global(@soccer_window, new(picture('Prolog Soccer Simulation'))).
 
