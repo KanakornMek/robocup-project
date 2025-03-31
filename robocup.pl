@@ -480,6 +480,7 @@ check_goal(TeamScored) :-
     assertz(score(TeamScored, Snew)),
     score(team1, S1), score(team2, S2), % Get updated scores for message
     format('GOAL!!! ~w scores! Score: Team1 ~w - Team2 ~w~n', [TeamScored, S1, S2]),
+    sleep(1),
     reset_field, % Reset positions after goal
     !.
 
@@ -491,6 +492,7 @@ check_ball_out :-
     \+ goal_position(team1, BX, BY), 
     \+ goal_position(team2, BX, BY), 
     format('Ball out of bounds at (~w, ~w). Resetting.~n', [BX, BY]),
+    sleep(1),
     reset_field,
     !. 
 
@@ -610,7 +612,7 @@ draw_field :-
     send(@soccer_window, display, new(Box, box(FieldW, FieldH))),
     send(Box, pen, 2),
     send(Box, move, point(OffsetX, OffsetY)),
-    send(Box, fill_pattern, colour(green)),
+    send(Box, fill_pattern, colour(forestgreen)),
     GoalHeight = 100, GoalWidth = 10,
     GoalCenterY = FieldH / 2,
     GoalTopY is GoalCenterY - GoalHeight / 2,
@@ -627,15 +629,16 @@ draw_field :-
 
 draw_players :-
     OffsetX = 10, OffsetY = 10,
-    forall(player(PlayerID,Team, _, position(X, Y), _),
+    forall(player(PlayerID,Team, Role, position(X, Y), _),
         ( CX is OffsetX + X, CY is OffsetY + Y,
-          send(@soccer_window, display, new(Circle, circle(10))),
+          send(@soccer_window, display, new(Circle, circle(15))),
           (Team == team1 -> send(Circle, fill_pattern, colour(red))
-          ; send(Circle, fill_pattern, colour(blue))),
+          ; send(Circle, fill_pattern, colour(dodgerblue))),
           send(Circle, move, point(CX, CY)),
-          format(string(DisplayText), '~w', [PlayerID]),
+          format(string(DisplayText), '~w ~w', [PlayerID, Role]),
           send(@soccer_window, display, new(T, text(DisplayText))),
-          send(T, move, point(CX - 5, CY - 15))
+          send(T, alignment, center),
+          send(T, center, point(CX, CY - 10))
         )).
 
 draw_ball :-
@@ -644,7 +647,9 @@ draw_ball :-
     CX is OffsetX + X, CY is OffsetY + Y,
     ( catch(send(@soccer_window, display, new(Ball, circle(8))), _, fail) ->
       send(Ball, fill_pattern, colour(black)),
-      send(Ball, move, point(CX, CY))
+      CXNew is CX + 3.75,
+      CYNew is CY + 3.75,
+      send(Ball, move, point(CXNew, CYNew))
     ; true
     ).
 

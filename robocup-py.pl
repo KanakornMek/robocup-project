@@ -1,9 +1,11 @@
+% :- assertz(file_search_path(library,pce('prolog/lib'))).
+:- use_module(library(pce)).
+
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
 :- dynamic tackle_cooldown/1.
 
-% --- Core Game Data ---
 
 % Define the soccer field dimensions.
 field(size(1000, 500)).
@@ -17,19 +19,17 @@ tackle_cooldown(0).
 % Define player positions and states.
 % Team 1 players:
 player(p1, team1, forward, position(200, 250), stamina(100)).
-player(p2, team1, forward, position(500, 300), stamina(100)). % Adjusted starting pos for testing
+player(p2, team1, forward, position(500, 300), stamina(100)).
 player(p3, team1, defender, position(700, 120), stamina(100)).
 player(p4, team1, goalkeeper, position(50, 250), stamina(100)).
 % Team 2 players:
-player(p5, team2, forward, position(800, 250), stamina(100)). % Adjusted starting pos for testing
-player(p6, team2, forward, position(600, 200), stamina(100)). % Adjusted starting pos for testing
+player(p5, team2, forward, position(800, 250), stamina(100)).
+player(p6, team2, forward, position(600, 200), stamina(100)).
 player(p7, team2, defender, position(900, 200), stamina(100)).
 player(p8, team2, goalkeeper, position(950, 250), stamina(100)).
 
 score(team1, 0).
 score(team2, 0).
-
-% --- Helper Predicates ---
 
 get_other_team(team1, team2).
 get_other_team(team2, team1).
@@ -68,40 +68,40 @@ is_near_opponent(X, Y, MyTeam, Threshold) :-
     player(_, OpponentTeam, _, position(OppX, OppY), _),
     euclidean_distance(X, Y, OppX, OppY, Dist),
     Dist =< Threshold,
-    !. % Cut: Found one nearby opponent, no need to check others
+    !.
 
 % Check if a position is near any opponent
 is_near_teammate(X, Y, MyTeam, Threshold) :-
     player(_, MyTeam, _, position(OppX, OppY), _),
     euclidean_distance(X, Y, OppX, OppY, Dist),
     Dist =< Threshold,
-    !. % Cut: Found one nearby opponent, no need to check others
+    !.
 
 % Find an open space away from opponents near a given point (X1, Y1)
 find_open_space(X1, Y1, MyTeam, SearchRadius, FoundX, FoundY) :-
     field(size(MaxX, MaxY)),
-    % Try points in expanding circles/squares around X1, Y1
+    % try points around X1, Y1
     between(0, SearchRadius, R), % Iterate radius
     Lower is -R,
     Upper is R,
-    ( between(Lower, Upper, DX) ; between(Lower, Upper, DY)), % Check perimeter first (implicitly by search order)
+    ( between(Lower, Upper, DX) ; between(Lower, Upper, DY)), % Check perimeter first
     abs(DX) =:= R ; abs(DY) =:= R, % Ensure we are on the perimeter of the square for this radius R
     TempX is X1 + DX,
     TempY is Y1 + DY,
-    % Check bounds
+    % check bounds
     TempX >= 0, TempX =< MaxX,
     TempY >= 0, TempY =< MaxY,
-    % Check if space is clear of opponents
-    \+ is_near_opponent(TempX, TempY, MyTeam, 20), % Check against a proximity threshold
+    % check if space is clear of opponents
+    \+ is_near_opponent(TempX, TempY, MyTeam, 20), %check against a proximity threshold
     FoundX = TempX,
     FoundY = TempY,
-    !. % Cut: Found the first suitable open space
+    !.
 
 % Default if no suitable open space found nearby
 find_open_space(X, Y, _, _, X, Y).
 
 
-% --- Ball Holder Management ---
+% Ball Holder Management
 
 update_ball_holder(PlayerID) :-
     retractall(ball_holder(_)),   % Remove any previous ball holder
@@ -114,7 +114,7 @@ update_ball_holder(PlayerID) :-
 clear_ball_holder :-
     retractall(ball_holder(_)).
 
-% --- Player State Update ---
+%  Player State Update 
 
 update_player_position(PlayerID, NewX, NewY) :-
     player(PlayerID, Team, Role, position(_, _), stamina(S)),
@@ -130,7 +130,7 @@ update_player_position(PlayerID, NewX, NewY) :-
     ; true ).
 
 
-% --- Actions for Player WITH Ball ---
+% Actions for Player with Ball 
 
 decide_action_with_ball(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
@@ -138,15 +138,15 @@ decide_action_with_ball(PlayerID) :-
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     euclidean_distance(X, Y, GoalX, GoalY, DistToGoal),
 
-    % 1. Shoot if close enough?
+    % Shoot if close enough?
     ( DistToGoal =< 120, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
-        shoot(PlayerID), ! % Cut: Action decided
+        shoot(PlayerID), !
     ; % 2. Smart Pass?
       find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
       BestTeammateID \= none -> % Found a teammate to pass to
-        pass_ball_to(PlayerID, BestTeammateID), ! % Cut: Action decided
+        pass_ball_to(PlayerID, BestTeammateID), !
     ; % 3. Else, Move Towards Goal (avoiding opponents)
-      move_towards_goal_with_ball(PlayerID), ! % Cut: Action decided
+      move_towards_goal_with_ball(PlayerID), !
     ).
 decide_action_with_ball(_). % If none of the above, do nothing this tick
 
@@ -158,7 +158,7 @@ distance_between_point_and_line(AX, AY, BX1, BY1, BX2, BY2, D, IX, IY) :-
     IY is BY1 + Lambda * (BY2 - BY1),
     D is D1 / L.
 
-% Helper: Shoot the ball towards the opponent's goal center
+% Shoot the ball towards the opponent's goal center
 shoot(PlayerID) :-
     ball_holder(PlayerID), % Ensure player still has ball
     player(PlayerID, Team, Role, position(X, Y), _),
@@ -480,6 +480,7 @@ check_goal(TeamScored) :-
     assertz(score(TeamScored, Snew)),
     score(team1, S1), score(team2, S2), % Get updated scores for message
     format('GOAL!!! ~w scores! Score: Team1 ~w - Team2 ~w~n', [TeamScored, S1, S2]),
+    sleep(1),
     reset_field, % Reset positions after goal
     !.
 
@@ -491,6 +492,7 @@ check_ball_out :-
     \+ goal_position(team1, BX, BY), 
     \+ goal_position(team2, BX, BY), 
     format('Ball out of bounds at (~w, ~w). Resetting.~n', [BX, BY]),
+    sleep(1),
     reset_field,
     !. 
 
@@ -529,9 +531,9 @@ simulate_round :-
         forall(
             member(PlayerID, AllPlayers), % Iterate through players
             ( 
-                ball_holder(PlayerID) %  check if are there ball holder?
+                ball_holder(PlayerID) %  check if are there ball holder
                 -> true % do nothing
-                ; ( % else (they DON'T have the ball)...
+                ; ( % else (they don't have the ball)
                     decide_action_without_ball(PlayerID) % Decide based on game state
                   )
             )
@@ -557,4 +559,3 @@ run_simulation(N) :-
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
-    % Should we add cut so that it does not continue to be false after a true simulate_round
