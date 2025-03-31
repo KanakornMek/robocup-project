@@ -1,3 +1,4 @@
+
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
@@ -215,7 +216,7 @@ distance_between_point_and_line(AX, AY, BX1, BY1, BX2, BY2, D, IX, IY) :-
 % Shoot the ball towards the opponent's goal center
 shoot(PlayerID, StaminaLeft) :-
     ball_holder(PlayerID), % Ensure player still has ball
-    update_player_stamina(StaminaLeft),
+    update_player_stamina(PlayerID, StaminaLeft),
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     player(GKID, OpponentTeam, goalkeeper, position(GKX, GKY), _),
@@ -271,7 +272,7 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
     ).
 
 % Helper calculates max distance ball is able to be kicked.
-max_kick_distance(PlayerID, MaxDistance, Sn):-
+max_kick_distance(PlayerID, PassRange, Sn):-
     player(PlayerID, _Team, _Role, _Position, stamina(S)),
     % PARAMETER TO BE TUNED
     Distance is 400,
