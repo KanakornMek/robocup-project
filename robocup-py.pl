@@ -137,14 +137,15 @@ decide_action_with_ball(PlayerID) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     euclidean_distance(X, Y, GoalX, GoalY, DistToGoal),
+    max_kick_distance(PlayerID, MaxKickDistance, StaminaLeft),
 
     % Shoot if close enough?
-    ( DistToGoal =< 120, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
-        shoot(PlayerID), !
+    ( DistToGoal =< MaxKickDistance, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
+        shoot(PlayerID, StaminaLeft), !
     ; % 2. Smart Pass?
-      find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
+      find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID, StaminaLeft), % Check if a good pass exists
       BestTeammateID \= none -> % Found a teammate to pass to
-        pass_ball_to(PlayerID, BestTeammateID), !
+        pass_ball_to(PlayerID, BestTeammateID, StaminaLeft), !
     ; % 3. Else, Move Towards Goal (avoiding opponents)
       move_towards_goal_with_ball(PlayerID), !
     ).
@@ -159,8 +160,9 @@ distance_between_point_and_line(AX, AY, BX1, BY1, BX2, BY2, D, IX, IY) :-
     D is D1 / L.
 
 % Shoot the ball towards the opponent's goal center
-shoot(PlayerID) :-
+shoot(PlayerID, StaminaLeft) :-
     ball_holder(PlayerID), % Ensure player still has ball
+    update_player_stamina(StaminaLeft),
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     player(GKID, OpponentTeam, goalkeeper, position(GKX, GKY), _),
@@ -185,15 +187,17 @@ shoot(PlayerID) :-
     format('~w (~w ~w) SHOOTS towards (~w, ~w)!~n', [PlayerID, Team, Role, GoalX, ClampedTargetY]).
 
 % Helper: Find the best teammate to pass to
-find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID) :-
+find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    PassRange is 300, % Max pass distance
-
+    max_kick_distance(PlayerID,PassRange,StaminaLeft),
     % Find all valid teammates within range, closer to goal, and relatively open
+    % PARAMETER TO BE TUNED
+    TeammateDistToGoalWeight is 1,
+    TeammateStaminaWeight is 0.2,
     findall(
         Score-TeammateID,
-        (   player(TeammateID, Team, _, position(TX, TY), _),
+        (   player(TeammateID, Team, _, position(TX, TY), stamina(S)),
             TeammateID \= PlayerID, % Not the player themselves
             euclidean_distance(X, Y, TX, TY, DistToTeammate),
             DistToTeammate =< PassRange, % Within pass range
@@ -202,7 +206,7 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID) :-
             TeammateDistToGoal < MyDistToGoal, % Teammate is closer to goal
             \+ is_near_opponent(TX, TY, Team, 30), % Teammate is relatively open (check 30 unit radius)
             % Score: Lower is better (closer to goal is main factor)
-            Score = TeammateDistToGoal
+            Score = TeammateDistToGoal*TeammateDistToGoalWeight + (1/S)*TeammateStaminaWeight
         ),
         ScoredTeammates
     ),
@@ -213,13 +217,36 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID) :-
     ; BestTeammateID = none % No suitable teammate found
     ).
 
+% Helper calculates max distance ball is able to be kicked.
+max_kick_distance(PlayerID, MaxDistance, Sn):-
+    player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    % PARAMETER TO BE TUNED
+    Distance is 400,
+    StaminaRampThreshold is 5,
+    StaminaPerPassDistance is 0.2,
+    ((Distance>StaminaRampThreshold)->
+        StaminaUsage is StaminaPerPassDistance*(Distance-StaminaRampThreshold)
+    ; StaminaUsage is 0),
+    StaminaLeft is S-StaminaUsage,
+    ((StaminaUsage>S)->
+        (
+        ((S>StaminaRampThreshold)->
+            PassRange is (S/StaminaPerPassDistance)+StaminaRampThreshold
+        ; PassRange is StaminaRampThreshold)
+        )
+    ; PassRange is Distance),
+    ((StaminaUsage>S)->
+        Sn is 0
+    ; Sn is StaminaLeft).
+
 
 % Pass ball to a specific teammate
-pass_ball_to(PlayerID, TeammateID) :-
+pass_ball_to(PlayerID, TeammateID, StaminaLeft) :-
     ball_holder(PlayerID),
     player(PlayerID, Team, Role, _, _),
     player(TeammateID, Team, TeammateRole, position(TeammateX, TeammateY), _),
     format('~w (~w ~w) passes to ~w (~w ~w) at (~w, ~w)~n', [PlayerID, Team, Role, TeammateID, Team, TeammateRole, TeammateX, TeammateY]),
+    update_player_stamina(PlayerID, StaminaLeft),
     update_ball_holder(TeammateID).
 
 
@@ -559,3 +586,10 @@ run_simulation(N) :-
     simulate_round,
     N1 is N - 1,
     run_simulation(N1).
+
+% TO BE DELETED TEMP
+update_player_stamina(PlayerID, Stamina) :-
+    player(PlayerID, Team, Role, position(X, Y), _Stamina),
+    retract(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(X, Y), stamina(Stamina))),
+    !.
