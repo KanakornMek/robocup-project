@@ -613,9 +613,53 @@ draw_field :-
     send(Box, pen, 2),
     send(Box, move, point(OffsetX, OffsetY)),
     send(Box, fill_pattern, colour(forestgreen)),
+
+    LineSize = 2,
+    CenterFieldX is OffsetX + FieldW/2,
+    CenterFieldY is OffsetY + FieldH/2,
+    CenterCircleRadius is FieldH / 4,
+    PenaltyAreaWidth is FieldH/2,
+    PenaltyAreaHeight is FieldW/6,
+
+    send(@soccer_window, display, new(CenterCircle, circle(CenterCircleRadius))),
+    send(CenterCircle, center, point(CenterFieldX, CenterFieldY)),
+    send(CenterCircle, colour, colour(white)),
+    send(CenterCircle, fill_pattern, @nil),
+    send(CenterCircle, pen, LineSize),
+
+    send(@soccer_window, display, new(CenterLine, line(CenterFieldX, OffsetY, CenterFieldX,OffsetY + FieldH))),
+    send(CenterLine, colour, colour(white)),
+    send(CenterLine, pen, LineSize),
+
+    send(@soccer_window, display, new(CenterDot, circle(LineSize))),
+    send(CenterDot, center, point(CenterFieldX, CenterFieldY)),
+    send(CenterDot, colour, colour(white)),
+    send(CenterDot, fill_pattern, colour(white)),
+    send(CenterDot, pen, 5),
+
+    Pen_A1_X = OffsetX,
+    Pen_A1_Y is CenterFieldY - PenaltyAreaWidth/2,
+
+    Pen_A2_X is OffsetX + FieldW - PenaltyAreaHeight,
+    Pen_A2_Y = Pen_A1_Y,
+
+    send(@soccer_window, display, new(PenaltyArea1, box(PenaltyAreaHeight, PenaltyAreaWidth))),
+    send(PenaltyArea1, move, point(Pen_A1_X, Pen_A1_Y)),
+    send(PenaltyArea1, colour, colour(white)),
+    send(PenaltyArea1, fill_pattern, @nil),
+    send(PenaltyArea1, pen, LineSize),
+
+    send(@soccer_window, display, new(PenaltyArea2, box(PenaltyAreaHeight, PenaltyAreaWidth))),
+    send(PenaltyArea2, move, point(Pen_A2_X, Pen_A2_Y)),
+    send(PenaltyArea2, colour, colour(white)),
+    send(PenaltyArea2, fill_pattern, @nil), 
+    send(PenaltyArea2, pen, LineSize),
+
+
     GoalHeight = 100, GoalWidth = 10,
     GoalCenterY = FieldH / 2,
     GoalTopY is GoalCenterY - GoalHeight / 2,
+
     % Team 1 Goal (Left)
     Goal1_VisualX = OffsetX, Goal1_VisualY is OffsetY + GoalTopY,
     send(@soccer_window, display, new(Goal1Rect, box(GoalWidth, GoalHeight))),
