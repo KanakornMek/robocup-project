@@ -387,7 +387,11 @@ decide_action_without_ball(PlayerID) :-
 move_to_offensive_position(PlayerID, Team, X, Y) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    MoveStep is 12,
+    player(PlayerID, _, _, _, stamina(S)),
+    ( (S < 40) ->
+        (MoveStep is 9);
+        (MoveStep is 12)
+    ),
 
     % Find open space towards the opponent goal
     find_open_space_towards_goal(X, Y, Team, GoalX, GoalY, 80, TargetX, TargetY),
@@ -402,11 +406,6 @@ move_to_offensive_position(PlayerID, Team, X, Y) :-
     NewY is Y + NormY * MoveStep,
 
     % update_player_position(PlayerID, NewX, NewY),
-    player(PlayerID, _, _, _, stamina(S)),
-    ( S < 40 ->
-        MoveStep is 9;
-        true
-    ),
     move_player(PlayerID, NewX, NewY, MoveStep),
     format('~w (~w) moves offensively towards (~1f, ~1f)~n', [PlayerID, Team, NewX, NewY]), !.
 
@@ -499,11 +498,13 @@ catch_ball(PlayerID) :-
 % Try to Tackle player with ball and steal ball (has random chance of unsuccess)
 tackle :-
     % Find all player around the ball with proximity = 20
+    ball_holder(HolderID),
+    player(HolderID, HolderTeam, _, _, _),
     findall(player(PlayerID, _, _, _, _),(
-        player(PlayerID, _, _, position(PX, PY), _),
+        player(PlayerID, PlayerTeam, _, position(PX, PY), _),
         ball(position(X, Y)),
-        ball_holder(HolderID),
         PlayerID \= HolderID,
+        PlayerTeam \= HolderTeam,
         XDiff is PX - X,
         YDiff is PY - Y,
         D is XDiff**2 + YDiff**2,
