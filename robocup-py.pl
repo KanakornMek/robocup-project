@@ -3,7 +3,6 @@
 :- dynamic score/2.
 :- dynamic tackle_cooldown/1.
 
-% --- Core Game Data ---
 
 % Define the soccer field dimensions.
 field(size(1000, 500)).
@@ -28,8 +27,6 @@ player(p8, team2, goalkeeper, position(950, 250), stamina(100)).
 
 score(team1, 0).
 score(team2, 0).
-
-% --- Helper Predicates ---
 
 get_other_team(team1, team2).
 get_other_team(team2, team1).
@@ -189,7 +186,7 @@ move_player(PlayerID,TargetX,TargetY,Speed) :-
 % --- Actions for Player WITH Ball ---
 
 decide_action_with_ball(PlayerID) :-
-    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     euclidean_distance(X, Y, GoalX, GoalY, DistToGoal),
@@ -198,8 +195,8 @@ decide_action_with_ball(PlayerID) :-
     ( DistToGoal =< 150, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
         shoot(PlayerID), ! % Cut: Action decided
     ; % 2. Smart Pass?
-      ( (find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
-      BestTeammateID \= none) ) -> % Found a teammate to pass to
+      (find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
+      BestTeammateID \= none) -> % Found a teammate to pass to
         pass_ball_to(PlayerID, BestTeammateID), ! % Cut: Action decided
     ; % 3. Else, Move Towards Goal (avoiding opponents)
       move_towards_goal_with_ball(PlayerID), ! % Cut: Action decided
@@ -290,7 +287,7 @@ move_towards_goal_with_ball(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    MoveStep is 16,
+    MoveStep is 15,
 
     % Calculate direct path vector
     DX_direct is GoalX - X,
