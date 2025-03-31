@@ -88,6 +88,66 @@ class SoccerSimulationApp:
         # Draw the field (green rectangle)
         self.canvas.create_rectangle(self.offset_x, self.offset_y, self.field_width+self.offset_x, self.field_height+self.offset_y, fill="green", outline="black", width=2)
 
+        line_size = 2
+        center_field_x = self.offset_x + self.field_width / 2
+        center_field_y = self.offset_y + self.field_height / 2
+        center_circle_radius = self.field_height / 8
+
+        penalty_area_draw_height = self.field_height / 2
+        penalty_area_draw_width = self.field_width / 6
+
+        cc_x0 = center_field_x - center_circle_radius
+        cc_y0 = center_field_y - center_circle_radius
+        cc_x1 = center_field_x + center_circle_radius
+        cc_y1 = center_field_y + center_circle_radius
+
+        self.canvas.create_oval(
+            cc_x0, cc_y0, cc_x1, cc_y1, 
+            outline="white",
+            fill="",
+            width=line_size
+        )
+
+        self.canvas.create_line(
+            center_field_x, self.offset_y,
+            center_field_x, self.offset_y + self.field_height,
+            fill="white",
+            width=line_size
+        )
+
+        dot_radius = 4
+        cd_x0 = center_field_x - dot_radius
+        cd_y0 = center_field_y - dot_radius
+        cd_x1 = center_field_x + dot_radius
+        cd_y1 = center_field_y + dot_radius
+        self.canvas.create_oval(
+           cd_x0, cd_y0, cd_x1, cd_y1,
+           fill="white",
+           outline="white"
+        )
+
+        pa1_x0 = self.offset_x
+        pa1_y0 = center_field_y - penalty_area_draw_height / 2
+        pa1_x1 = self.offset_x + penalty_area_draw_width
+        pa1_y1 = pa1_y0 + penalty_area_draw_height
+        self.canvas.create_rectangle(
+            pa1_x0, pa1_y0, pa1_x1, pa1_y1,
+            outline="white",
+            fill="",
+            width=line_size
+        )
+
+        pa2_x0 = self.offset_x + self.field_width - penalty_area_draw_width
+        pa2_y0 = center_field_y - penalty_area_draw_height / 2
+        pa2_x1 = self.offset_x + self.field_width
+        pa2_y1 = pa2_y0 + penalty_area_draw_height
+        self.canvas.create_rectangle(
+            pa2_x0, pa2_y0, pa2_x1, pa2_y1,
+            outline="white",
+            fill="",
+            width=line_size
+        )
+
         goal_height = 100
         goal_width = 10
         goal_center_y = self.field_height / 2
@@ -111,7 +171,7 @@ class SoccerSimulationApp:
             cx = self.offset_x + x
             cy = self.offset_y + y
 
-            radius = 10
+            radius = 5
 
             color = "red" if team == "team1" else "blue"
             self.canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius, fill=color)
@@ -125,7 +185,7 @@ class SoccerSimulationApp:
             x = solution["X"]
             y = solution["Y"]
 
-            radius = 8
+            radius = 3
 
             cx = self.offset_x + x
             cy = self.offset_y + y
