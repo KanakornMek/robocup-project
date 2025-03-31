@@ -1,6 +1,3 @@
-% :- assertz(file_search_path(library,pce('prolog/lib'))).
-:- use_module(library(pce)).
-
 :- dynamic field/1, ball/1, player/5.
 :- dynamic ball_holder/1.
 :- dynamic score/2.
@@ -129,6 +126,62 @@ update_player_position(PlayerID, NewX, NewY) :-
         assertz(ball(position(ClampedX, ClampedY)))
     ; true ).
 
+update_player_stamina(PlayerID, Stamina) :-
+    player(PlayerID, Team, Role, position(X, Y), _),
+    retract(player(PlayerID, _Team, _Role, _Position, _)),
+    assertz(player(PlayerID, Team, Role, position(X, Y), stamina(Stamina))),
+    !.
+
+regenerate_player_stamina(PlayerID, StaminaPerSec) :-
+    player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    Sn is S+StaminaPerSec,
+    ( Sn > 100 ->
+        (
+            Stamina is 100
+        ); (
+            Stamina is Sn
+        )
+    ),
+    update_player_stamina(PlayerID, Stamina),
+    !.
+
+move_player(PlayerID,TargetX,TargetY,Speed) :-
+    % Calculate stamina usage
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    StaminaRampThreshold is 8,
+    StaminaPerSpeed is 0.5,
+    ((Speed>StaminaRampThreshold)->
+        StaminaUsage is StaminaPerSpeed*(Speed-StaminaRampThreshold)
+    ; StaminaUsage is 0),
+    StaminaLeft is S-StaminaUsage,
+    ((StaminaUsage>S)->
+        (
+        ((S>StaminaRampThreshold)->
+            ClampedSpeed is (S/StaminaPerSpeed)+StaminaRampThreshold
+        ; ClampedSpeed is StaminaRampThreshold)
+        )
+    ; ClampedSpeed is Speed),
+    ((StaminaUsage>S)->
+        Sn is 0
+    ; Sn is StaminaLeft),
+    Dx is TargetX-X,
+    Dy is TargetY-Y,
+    normalize(Dx,Dy,NormX,NormY),
+    Dxn is NormX*ClampedSpeed,
+    Dyn is NormY*ClampedSpeed,
+    NewX is X+Dxn,
+    NewY is Y+Dyn,
+    % Ensure within bounds
+    field(size(MaxX, MaxY)),
+    clamp(NewX, 0, MaxX, ClampedX), 
+    clamp(NewY, 0, MaxY, ClampedY),
+    retractall(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(ClampedX, ClampedY), stamina(Sn))),
+    % If this player is the ball holder, move the ball too
+    ( ball_holder(PlayerID) ->
+        retractall(ball(_)),
+        assertz(ball(position(ClampedX, ClampedY)))
+    ; true ),!.
 
 % Actions for Player with Ball 
 
