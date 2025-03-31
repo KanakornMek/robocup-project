@@ -1,9 +1,9 @@
 import tkinter as tk
 from pyswip import Prolog
 
-# Initialize the Prolog interpreter and consult the Prolog file (ensure the file is correct).
+# Initialize the Prolog 
 prolog = Prolog()
-prolog.consult('robocup-py.pl')  # Path to your Prolog file
+prolog.consult('robocup-py.pl') 
 
 # Tkinter GUI Setup
 class SoccerSimulationApp:
@@ -27,7 +27,11 @@ class SoccerSimulationApp:
         self.rounds_entry = tk.Entry(root)
         self.rounds_entry.pack()
         self.run_button = tk.Button(root, text="Run Simulation", command=self.run_simulation)
-        self.run_button.pack()
+        self.run_button.pack(pady=5)  
+
+        self.paused = False
+        self.pause_button = tk.Button(root, text="Pause", command=self.toggle_pause)
+        self.pause_button.pack(pady=5) 
 
         self.rounds = 0
         self.current_round = 0
@@ -54,10 +58,18 @@ class SoccerSimulationApp:
 
         self.current_round += 1
         if self.current_round < self.rounds:
-            # Schedule the next round after a small delay
-            self.root.after(50, self.simulate_round)  # 50ms delay
+            if not self.paused:
+                self.root.after(50, self.simulate_round)  # 50ms delay
         else:
             print("Simulation finished.")
+
+    def toggle_pause(self):
+        self.paused = not self.paused
+        if self.paused:
+            self.pause_button.config(text="Resume")
+        else:
+            self.pause_button.config(text="Pause")
+            self.simulate_round()
 
     def update_gui(self):
         self.canvas.delete("all")  # Clear the canvas
