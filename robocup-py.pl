@@ -129,11 +129,67 @@ update_player_position(PlayerID, NewX, NewY) :-
         assertz(ball(position(ClampedX, ClampedY)))
     ; true ).
 
+update_player_stamina(PlayerID, Stamina) :-
+    player(PlayerID, Team, Role, position(X, Y), _),
+    retract(player(PlayerID, _Team, _Role, _Position, _)),
+    assertz(player(PlayerID, Team, Role, position(X, Y), stamina(Stamina))),
+    !.
+
+regenerate_player_stamina(PlayerID, StaminaPerSec) :-
+    player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    Sn is S+StaminaPerSec,
+    ( Sn > 100 ->
+        (
+            Stamina is 100
+        ); (
+            Stamina is Sn
+        )
+    ),
+    update_player_stamina(PlayerID, Stamina),
+    !.
+
+move_player(PlayerID,TargetX,TargetY,Speed) :-
+    % Calculate stamina usage
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    StaminaRampThreshold is 8,
+    StaminaPerSpeed is 0.5,
+    ((Speed>StaminaRampThreshold)->
+        StaminaUsage is StaminaPerSpeed*(Speed-StaminaRampThreshold)
+    ; StaminaUsage is 0),
+    StaminaLeft is S-StaminaUsage,
+    ((StaminaUsage>S)->
+        (
+        ((S>StaminaRampThreshold)->
+            ClampedSpeed is (S/StaminaPerSpeed)+StaminaRampThreshold
+        ; ClampedSpeed is StaminaRampThreshold)
+        )
+    ; ClampedSpeed is Speed),
+    ((StaminaUsage>S)->
+        Sn is 0
+    ; Sn is StaminaLeft),
+    Dx is TargetX-X,
+    Dy is TargetY-Y,
+    normalize(Dx,Dy,NormX,NormY),
+    Dxn is NormX*ClampedSpeed,
+    Dyn is NormY*ClampedSpeed,
+    NewX is X+Dxn,
+    NewY is Y+Dyn,
+    % Ensure within bounds
+    field(size(MaxX, MaxY)),
+    clamp(NewX, 0, MaxX, ClampedX), 
+    clamp(NewY, 0, MaxY, ClampedY),
+    retractall(player(PlayerID, _Team, _Role, _Position, _Stamina)),
+    assertz(player(PlayerID, Team, Role, position(ClampedX, ClampedY), stamina(Sn))),
+    % If this player is the ball holder, move the ball too
+    ( ball_holder(PlayerID) ->
+        retractall(ball(_)),
+        assertz(ball(position(ClampedX, ClampedY)))
+    ; true ),!.
 
 % --- Actions for Player WITH Ball ---
 
 decide_action_with_ball(PlayerID) :-
-    player(PlayerID, Team, Role, position(X, Y), _),
+    player(PlayerID, Team, Role, position(X, Y), stamina(S)),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     euclidean_distance(X, Y, GoalX, GoalY, DistToGoal),
@@ -142,8 +198,8 @@ decide_action_with_ball(PlayerID) :-
     ( DistToGoal =< 120, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
         shoot(PlayerID), ! % Cut: Action decided
     ; % 2. Smart Pass?
-      find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
-      BestTeammateID \= none -> % Found a teammate to pass to
+      ( (find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
+      BestTeammateID \= none); (S < 40) ) -> % Found a teammate to pass to
         pass_ball_to(PlayerID, BestTeammateID), ! % Cut: Action decided
     ; % 3. Else, Move Towards Goal (avoiding opponents)
       move_towards_goal_with_ball(PlayerID), ! % Cut: Action decided
@@ -188,7 +244,7 @@ shoot(PlayerID) :-
 find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    PassRange is 300, % Max pass distance
+    PassRange is 100, % Max pass distance
 
     % Find all valid teammates within range, closer to goal, and relatively open
     findall(
@@ -253,7 +309,8 @@ move_towards_goal_with_ball(PlayerID) :-
         NewY = NextY_direct
     ),
 
-    update_player_position(PlayerID, NewX, NewY),
+    % update_player_position(PlayerID, NewX, NewY),
+    move_player(PlayerID, NewX, NewY, MoveStep),
     format('~w (~w ~w) moves with ball towards goal to (~1f, ~1f)~n', [PlayerID, Team, Role, NewX, NewY]).
 
 %  Find open space towards the goal
@@ -344,7 +401,13 @@ move_to_offensive_position(PlayerID, Team, X, Y) :-
     NewX is X + NormX * MoveStep,
     NewY is Y + NormY * MoveStep,
 
-    update_player_position(PlayerID, NewX, NewY),
+    % update_player_position(PlayerID, NewX, NewY),
+    player(PlayerID, _, _, _, stamina(S)),
+    ( S < 40 ->
+        MoveStep is 9;
+        true
+    ),
+    move_player(PlayerID, NewX, NewY, MoveStep),
     format('~w (~w) moves offensively towards (~1f, ~1f)~n', [PlayerID, Team, NewX, NewY]), !.
 
 
@@ -393,7 +456,8 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
         NewY is Y + NormY * MoveStep
     ),
     
-    update_player_position(PlayerID, NewX, NewY),
+    % update_player_position(PlayerID, NewX, NewY),
+    move_player(PlayerID, NewX, NewY, MoveStep),
     format('~w (~w) moves defensively towards (~1f, ~1f) covering (~1f, ~1f)~n', [PlayerID, Team, NewX, NewY, OppX, OppY]), !.
 
 % Basic move towards ball if no one holds it
@@ -412,7 +476,8 @@ move_towards_ball_basic(PlayerID) :-
         normalize(XDiff, YDiff, DX, DY),
         NewX is X1 + DX * MoveStep,
         NewY is Y1 + DY * MoveStep,
-        update_player_position(PlayerID, NewX, NewY),
+        % update_player_position(PlayerID, NewX, NewY),
+        move_player(PlayerID, NewX, NewY, MoveStep),
         format('~w (~w ~w) moves towards loose ball to (~w, ~w)~n', [PlayerID, Team, Role, NewX, NewY])
     ).
 
@@ -519,7 +584,8 @@ simulate_round :-
     ;
         % Decide action for ball holder 
         ( ball_holder(HolderID) ->
-            decide_action_with_ball(HolderID)
+            decide_action_with_ball(HolderID),
+            regenerate_player_stamina(HolderID, 2)
         ; true % No ball holder, do nothing
         ),
 
@@ -532,7 +598,8 @@ simulate_round :-
                 ball_holder(PlayerID) %  check if are there ball holder?
                 -> true % do nothing
                 ; ( % else (they DON'T have the ball)...
-                    decide_action_without_ball(PlayerID) % Decide based on game state
+                    decide_action_without_ball(PlayerID), % Decide based on game state
+                    regenerate_player_stamina(PlayerID, 2)
                   )
             )
         ),
@@ -556,5 +623,5 @@ run_simulation(N) :-
     N > 0,
     simulate_round,
     N1 is N - 1,
-    run_simulation(N1).
-    % Should we add cut so that it does not continue to be false after a true simulate_round
+    run_simulation(N1),
+    !.
