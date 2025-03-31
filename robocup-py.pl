@@ -195,11 +195,11 @@ decide_action_with_ball(PlayerID) :-
     euclidean_distance(X, Y, GoalX, GoalY, DistToGoal),
 
     % 1. Shoot if close enough?
-    ( DistToGoal =< 120, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
+    ( DistToGoal =< 150, Role \= goalkeeper -> % Increased shooting range, Goalkeepers usually don't shoot
         shoot(PlayerID), ! % Cut: Action decided
     ; % 2. Smart Pass?
       ( (find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID), % Check if a good pass exists
-      BestTeammateID \= none); (S < 40) ) -> % Found a teammate to pass to
+      BestTeammateID \= none) ) -> % Found a teammate to pass to
         pass_ball_to(PlayerID, BestTeammateID), ! % Cut: Action decided
     ; % 3. Else, Move Towards Goal (avoiding opponents)
       move_towards_goal_with_ball(PlayerID), ! % Cut: Action decided
@@ -244,7 +244,12 @@ shoot(PlayerID) :-
 find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    PassRange is 100, % Max pass distance
+    player(PlayerID, _, Role, _, _),
+    ( Role = goalkeeper -> (
+        PassRange is 300
+    );(
+        PassRange is 100
+    )), % Max pass distance
 
     % Find all valid teammates within range, closer to goal, and relatively open
     findall(
@@ -285,7 +290,7 @@ move_towards_goal_with_ball(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    MoveStep is 15,
+    MoveStep is 16,
 
     % Calculate direct path vector
     DX_direct is GoalX - X,
@@ -311,7 +316,8 @@ move_towards_goal_with_ball(PlayerID) :-
 
     % update_player_position(PlayerID, NewX, NewY),
     move_player(PlayerID, NewX, NewY, MoveStep),
-    format('~w (~w ~w) moves with ball towards goal to (~1f, ~1f)~n', [PlayerID, Team, Role, NewX, NewY]).
+    player(PlayerID, _, _, position(CurrentX, CurrentY), _),
+    format('~w (~w ~w) moves with ball towards goal to (~1f, ~1f)~n', [PlayerID, Team, Role, CurrentX, CurrentY]).
 
 %  Find open space towards the goal
 find_open_space_towards_goal(X1, Y1, MyTeam, GoalX, GoalY, SearchRadius, FoundX, FoundY) :-
@@ -388,7 +394,7 @@ move_to_offensive_position(PlayerID, Team, X, Y) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     player(PlayerID, _, _, _, stamina(S)),
-    ( (S < 40) ->
+    ( (S < 30) ->
         (MoveStep is 9);
         (MoveStep is 12)
     ),
@@ -407,7 +413,8 @@ move_to_offensive_position(PlayerID, Team, X, Y) :-
 
     % update_player_position(PlayerID, NewX, NewY),
     move_player(PlayerID, NewX, NewY, MoveStep),
-    format('~w (~w) moves offensively towards (~1f, ~1f)~n', [PlayerID, Team, NewX, NewY]), !.
+    player(PlayerID, _, _, position(CurrentX, CurrentY), _),
+    format('~w (~w) moves offensively towards (~1f, ~1f)~n', [PlayerID, Team, CurrentX, CurrentY]), !.
 
 
 % Move defensively between opponent with the ball and own goal
@@ -457,7 +464,8 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
     
     % update_player_position(PlayerID, NewX, NewY),
     move_player(PlayerID, NewX, NewY, MoveStep),
-    format('~w (~w) moves defensively towards (~1f, ~1f) covering (~1f, ~1f)~n', [PlayerID, Team, NewX, NewY, OppX, OppY]), !.
+    player(PlayerID, _, _, position(CurrentX, CurrentY), _),
+    format('~w (~w) moves defensively towards (~1f, ~1f) covering (~1f, ~1f)~n', [PlayerID, Team, CurrentX, CurrentY, OppX, OppY]), !.
 
 % Basic move towards ball if no one holds it
 move_towards_ball_basic(PlayerID) :-
@@ -477,7 +485,8 @@ move_towards_ball_basic(PlayerID) :-
         NewY is Y1 + DY * MoveStep,
         % update_player_position(PlayerID, NewX, NewY),
         move_player(PlayerID, NewX, NewY, MoveStep),
-        format('~w (~w ~w) moves towards loose ball to (~w, ~w)~n', [PlayerID, Team, Role, NewX, NewY])
+        player(PlayerID, _, _, position(CurrentX, CurrentY), _),
+        format('~w (~w ~w) moves towards loose ball to (~w, ~w)~n', [PlayerID, Team, Role, CurrentX, CurrentY])
     ).
 
 
@@ -606,7 +615,9 @@ simulate_round :-
         ),
 
         % Tackle
-        ( (tackle_cooldown(C), C>0) -> (update_cooldown, format('Cooldown ~w~n', [C])) ; tackle),
+        ( ball_holder(_) -> (
+            ( (tackle_cooldown(C), C>0) -> (update_cooldown, format('Cooldown ~w~n', [C])) ; tackle)
+        ); true ),
 
         % Goalkeepers attempt to catch (if ball is loose near them)
         ( catch_ball(p4) ; true ), 
