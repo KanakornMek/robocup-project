@@ -273,10 +273,12 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
 
 % Helper calculates max distance ball is able to be kicked.
 max_kick_distance(PlayerID, PassRange, Sn):-
-    player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    player(PlayerID, _Team, Role, _Position, stamina(S)),
     % PARAMETER TO BE TUNED
-    Distance is 400,
-    StaminaRampThreshold is 5,
+    ((Role = goalkeeper)->
+        Distance is 300
+    ; Distance is 100),
+    StaminaRampThreshold is 270,
     StaminaPerPassDistance is 0.2,
     ((Distance>StaminaRampThreshold)->
         StaminaUsage is StaminaPerPassDistance*(Distance-StaminaRampThreshold)
