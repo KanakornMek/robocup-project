@@ -569,6 +569,7 @@ tackle :-
 
     length(PlayerNearby, L),
 
+    % Random a nearby player to steal a ball if RandomNumber is higher than threshold
     (L > 0 -> (
         ball_holder(HolderID),
         format('Tackle: ~w is being tackled with ~w people attacking~n',[HolderID, L]),
