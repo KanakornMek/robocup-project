@@ -47,7 +47,7 @@ euclidean_distance(X1, Y1, X2, Y2, L) :-
     DY is Y1 - Y2,
     L is sqrt((DX**2) + (DY**2)).
 
-% Taxicab distance to reduce computation but unused
+% Taxicab distance to reduce computation
 taxicab_distance(X1, Y1, X2, Y2, L) :-
     DX is abs(X1 - X2),
     DY is abs(Y1 - Y2),
