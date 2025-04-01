@@ -45,11 +45,14 @@ euclidean_distance(X1, Y1, X2, Y2, L) :-
     DY is Y1 - Y2,
     L is sqrt((DX**2) + (DY**2)).
 
+% Taxicab distance to reduce computation but unused
 taxicab_distance(X1, Y1, X2, Y2, L) :-
     DX is abs(X1 - X2),
     DY is abs(Y1 - Y2),
     L is DX + DY.
 
+
+% Normalize vector to magnitude 1
 normalize(DX1, DY1, DX, DY) :-
     L is sqrt(DX1**2 + DY1**2),
     ( L =:= 0 -> DX = 0, DY = 0
@@ -107,13 +110,14 @@ update_ball_holder(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
     retractall(ball(_)),           % Update ball position to holder's position
     assertz(ball(position(X, Y))),
-    format('~w (~w ~w) now has the ball at (~w, ~w)~n', [PlayerID, Team, Role, X, Y]).
+    format('~w (~w ~w) now has the ball at (~1f, ~1f)~n', [PlayerID, Team, Role, X, Y]).
 
 clear_ball_holder :-
     retractall(ball_holder(_)).
 
 %  Player State Update 
 
+% Old player movement predicate (unused for this version)
 update_player_position(PlayerID, NewX, NewY) :-
     player(PlayerID, Team, Role, position(_, _), stamina(S)),
     field(size(MaxX, MaxY)),
@@ -135,6 +139,7 @@ update_player_stamina(PlayerID, Stamina) :-
 
 regenerate_player_stamina(PlayerID, StaminaPerSec) :-
     player(PlayerID, _Team, _Role, _Position, stamina(S)),
+    % Regenerate player stamina but cap at 100
     Sn is S+StaminaPerSec,
     ( Sn > 100 ->
         (
@@ -146,9 +151,12 @@ regenerate_player_stamina(PlayerID, StaminaPerSec) :-
     update_player_stamina(PlayerID, Stamina),
     !.
 
+% Similar to update_player_position but consider speed depend on stamina usage
 move_player(PlayerID,TargetX,TargetY,Speed) :-
     % Calculate stamina usage
     player(PlayerID, Team, Role, position(X, Y), stamina(S)),
+    % It will account for stamina when speed is more than threshold
+    % Distance depend on stamina if there is not enough, it will decrease
     StaminaRampThreshold is 8,
     StaminaPerSpeed is 0.5,
     ((Speed>StaminaRampThreshold)->
@@ -238,7 +246,7 @@ shoot(PlayerID, StaminaLeft) :-
         assertz(ball(position(GoalX, ClampedTargetY))), % Ball instantly moves to goal line target
         clear_ball_holder)% Player no longer has the ball after shooting
     ), % Player no longer has the ball after shooting
-    format('~w (~w ~w) SHOOTS towards (~w, ~w)!~n', [PlayerID, Team, Role, GoalX, ClampedTargetY]).
+    format('~w (~w ~w) SHOOTS towards (~1f, ~1f)!~n', [PlayerID, Team, Role, GoalX, ClampedTargetY]).
 
 % Helper: Find the best teammate to pass to
 find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
@@ -246,7 +254,6 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     max_kick_distance(PlayerID,PassRange,StaminaLeft),
     % Find all valid teammates within range, closer to goal, and relatively open
-    % PARAMETER TO BE TUNED
     TeammateDistToGoalWeight is 1,
     TeammateStaminaWeight is 0.2,
     findall(
@@ -260,21 +267,23 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
             TeammateDistToGoal < MyDistToGoal, % Teammate is closer to goal
             \+ is_near_opponent(TX, TY, Team, 30), % Teammate is relatively open (check 30 unit radius)
             % Score: Lower is better (closer to goal is main factor)
-            Score = TeammateDistToGoal*TeammateDistToGoalWeight + (1/S)*TeammateStaminaWeight
+            Score is TeammateDistToGoal*TeammateDistToGoalWeight + (1/S)*TeammateStaminaWeight
         ),
         ScoredTeammates
     ),
     sort(ScoredTeammates, SortedTeammates), % Sort by score (ascending)
     % Pick the best one (first in the sorted list)
     ( SortedTeammates = [BestScore-BestTeammateID | _] ->
-        format('~w considering pass to ~w (Score: ~w)~n', [PlayerID, BestTeammateID, BestScore])
+        format('~w considering pass to ~w (Score: ~3f)~n', [PlayerID, BestTeammateID, BestScore])
     ; BestTeammateID = none % No suitable teammate found
     ).
 
 % Helper calculates max distance ball is able to be kicked.
 max_kick_distance(PlayerID, PassRange, Sn):-
     player(PlayerID, _Team, Role, _Position, stamina(S)),
-    % PARAMETER TO BE TUNED
+    % Similar to move_player
+    % It will account for stamina when speed is more than threshold
+    % Distance depend on stamina if there is not enough, it will decrease
     ((Role = goalkeeper)->
         Distance is 300
     ; Distance is 100),
@@ -301,7 +310,7 @@ pass_ball_to(PlayerID, TeammateID, StaminaLeft) :-
     ball_holder(PlayerID),
     player(PlayerID, Team, Role, _, _),
     player(TeammateID, Team, TeammateRole, position(TeammateX, TeammateY), _),
-    format('~w (~w ~w) passes to ~w (~w ~w) at (~w, ~w)~n', [PlayerID, Team, Role, TeammateID, Team, TeammateRole, TeammateX, TeammateY]),
+    format('~w (~w ~w) passes to ~w (~w ~w) at (~1f, ~1f)~n', [PlayerID, Team, Role, TeammateID, Team, TeammateRole, TeammateX, TeammateY]),
     update_player_stamina(PlayerID, StaminaLeft),
     update_ball_holder(TeammateID).
 
@@ -312,7 +321,6 @@ move_towards_goal_with_ball(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    % PARAMETER TO BE TUNED
     % MoveStep is 15,
     MoveStep is 16,
 
@@ -385,18 +393,18 @@ decide_action_without_ball(PlayerID) :-
     ( ball_holder(HolderID) ->
         ( player(HolderID, HolderTeam, _, _, _) -> 
             ( HolderTeam == MyTeam ->
-                format('~w moving offensively.~n', [PlayerID]), % debugging remove later
+                format('~w moving offensively.~n', [PlayerID]), % if teammate has ball
                 move_to_offensive_position(PlayerID, MyTeam, X, Y)
             ;
-                format('~w moving defensively.~n', [PlayerID]),  
+                format('~w moving defensively.~n', [PlayerID]), % if teammate does nit have ball
                 move_to_defensive_position(PlayerID, MyTeam, X, Y, HolderID)
             )
-        ;   %
+        ;  
             format('ERROR: Ball holder ~w player data not found! Doing nothing.~n', [HolderID]),
             true
         )
     ; % No ball holder then move towards ball
-        format('~w moving towards loose ball.~n', [PlayerID]), % debugging remove later
+        format('~w moving towards loose ball.~n', [PlayerID]),
         move_towards_ball_basic(PlayerID)
     ),
     !.
@@ -418,7 +426,7 @@ move_to_offensive_position(PlayerID, Team, X, Y) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
     player(PlayerID, Role, _, _, stamina(S)),
-    % PARAMETER TO BE TUNED
+    % Move slower if there is less stamina
     ((Role=forward)->
         ( (S < 30) ->
         (MoveStep is 12);
@@ -455,14 +463,6 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
     player(PlayerID,_, Role, _, _),
     middle_goal_position(Team, MyGoalX, MyGoalY), 
     middle_goal_position(OpponentTeam, OpponentGoalX, OpponentGoalY),
-    %MoveStep is 14, % Defensive moves can be slightly faster/more direct
-
-    % Calculate target position: A point on the line between opponent and goal,
-    % but closer to the goal (e.g., 1/3rd of the way from goal to opponent)
-    % VectorX = OppX - MyGoalX,
-    % VectorY = OppY - MyGoalY,
-    % TargetX = MyGoalX + VectorX * 0.3, % Adjust fraction as needed (0.3 means 30% from goal)
-    % TargetY = MyGoalY + VectorY * 0.3,
 
     ball(position(Xb,Yb)),
     euclidean_distance(Xb,Yb,MyGoalX,MyGoalY,MyBd),
@@ -477,17 +477,16 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
             ),
             DistToGoalList
         ),
-        % PARAMETER TO BE TUNED
         ((MyBd>OpponentBd)->
             MoveStep is 8
         ;
             MoveStep is 24
         ),
-        sort(DistToGoalList, SortedDistToGoalList), % Sort by score (ascending)
-        % Pick the best one (first in the sorted list)
+        sort(DistToGoalList, SortedDistToGoalList),
+        % Pick the closest opponent (first in the sorted list)
         ( SortedDistToGoalList = [_-OpponentClosestID | _] -> (
             player(OpponentClosestID, _, _, position(OppX, OppY), _),
-            HalfX is (OppX + MyGoalX)/2,
+            HalfX is (OppX + MyGoalX)/2, % Defender stays between goal and the opponent
             HalfY is (OppY + MyGoalY)/2,
             DX is (HalfX - X),
             DY is (HalfY - Y),
@@ -496,7 +495,7 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
             NewY is Y + NormY * MoveStep
         ); true ) 
     );
-        %PARAMETER TO BE TUNED
+        % Move to opponent
         MoveStep is 8,
         TargetX is OppX,
         TargetY is OppY,
@@ -531,7 +530,7 @@ move_towards_ball_basic(PlayerID) :-
         % update_player_position(PlayerID, NewX, NewY),
         move_player(PlayerID, NewX, NewY, MoveStep),
         player(PlayerID, _, _, position(CurrentX, CurrentY), _),
-        format('~w (~w ~w) moves towards loose ball to (~w, ~w)~n', [PlayerID, Team, Role, CurrentX, CurrentY])
+        format('~w (~w ~w) moves towards loose ball to (~1f, ~1f)~n', [PlayerID, Team, Role, CurrentX, CurrentY])
     ).
 
 
@@ -543,15 +542,15 @@ catch_ball(PlayerID) :-
     CatchRange is 30,
     euclidean_distance(X, Y, BX, BY, Dist),
     Dist =< CatchRange,
-    middle_goal_position(Team, GoalX, _),
+    middle_goal_position(Team, _, _),
     ( (Team == team1, BX < 100) ; (Team == team2, BX > 900) ),
-    format('~w (~w goalkeeper) CATCHES the ball at (~w, ~w)!~n', [PlayerID, Team, X, Y]),
+    format('~w (~w goalkeeper) CATCHES the ball at (~1f, ~1f)!~n', [PlayerID, Team, X, Y]),
     update_ball_holder(PlayerID),  % Update ball holder to goalkeeper
     !.
 
 % Try to Tackle player with ball and steal ball (has random chance of unsuccess)
 tackle :-
-    % Find all player around the ball with proximity = 20
+    % Find all player around the ball with proximity D
     ball_holder(HolderID),
     player(HolderID, HolderTeam, _, _, _),
     findall(player(PlayerID, _, _, _, _),(
@@ -574,7 +573,7 @@ tackle :-
         random(0, L, RandomIndex),
         nth0(RandomIndex, PlayerNearby, player(TackleID, _, _, _, _)),
         random(RandomNumber),
-        format('Random ~w~n', [RandomNumber]),
+        format('Random ~3f~n', [RandomNumber]),
         (RandomNumber > 0.80 -> (
             update_ball_holder(TackleID),
             retract(tackle_cooldown(_)),
@@ -611,7 +610,7 @@ check_ball_out :-
     ( BX =< 0 ; BX >= MaxX ; BY =< 0 ; BY >= MaxY ),
     \+ goal_position(team1, BX, BY), 
     \+ goal_position(team2, BX, BY), 
-    format('Ball out of bounds at (~w, ~w). Resetting.~n', [BX, BY]),
+    format('Ball out of bounds at (~1f, ~1f). Resetting.~n', [BX, BY]),
     sleep(1),
     reset_field,
     !. 
