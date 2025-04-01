@@ -19,8 +19,8 @@ tackle_cooldown(0).
 % Define player positions and states.
 % Team 1 players:
 player(p1, team1, forward, position(200, 250), stamina(100)).
-player(p2, team1, forward, position(500, 300), stamina(100)).
-player(p3, team1, defender, position(700, 120), stamina(100)).
+player(p2, team1, forward, position(400, 300), stamina(100)).
+player(p3, team1, defender, position(100, 300), stamina(100)).
 player(p4, team1, goalkeeper, position(50, 250), stamina(100)).
 % Team 2 players:
 player(p5, team2, forward, position(800, 250), stamina(100)).
@@ -833,6 +833,7 @@ update_gui :-
     ; format('GUI Window closed or not available.~n'), fail 
     ).
 
+% Use this predicate to run program
 run_simulation_gui(N) :-
     create_gui,
     run_simulation_gui_loop(N).
@@ -841,6 +842,7 @@ run_simulation_gui_loop(0) :-
     score(team1, S1), score(team2, S2),
     format('Final Score: Team1 ~w - Team2 ~w~n', [S1, S2]),
     format('Simulation finished.~n').
+
 run_simulation_gui_loop(N) :-
     N > 0,
     wait_if_paused,

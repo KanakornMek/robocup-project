@@ -17,8 +17,8 @@ tackle_cooldown(0).
 % Define player positions and states.
 % Team 1 players:
 player(p1, team1, forward, position(200, 250), stamina(100)).
-player(p2, team1, forward, position(500, 300), stamina(100)).
-player(p3, team1, defender, position(700, 120), stamina(100)).
+player(p2, team1, forward, position(400, 300), stamina(100)).
+player(p3, team1, defender, position(100, 300), stamina(100)).
 player(p4, team1, goalkeeper, position(50, 250), stamina(100)).
 % Team 2 players:
 player(p5, team2, forward, position(800, 250), stamina(100)).
