@@ -255,8 +255,8 @@ find_best_teammate_to_pass(PlayerID, Team, X, Y, BestTeammateID,StaminaLeft) :-
             TeammateID \= PlayerID, % Not the player themselves
             euclidean_distance(X, Y, TX, TY, DistToTeammate),
             DistToTeammate =< PassRange, % Within pass range
-            euclidean_distance(X, Y, GoalX, GoalY, MyDistToGoal),
-            euclidean_distance(TX, TY, GoalX, GoalY, TeammateDistToGoal),
+            taxicab_distance(X, Y, GoalX, GoalY, MyDistToGoal),
+            taxicab_distance(TX, TY, GoalX, GoalY, TeammateDistToGoal),
             TeammateDistToGoal < MyDistToGoal, % Teammate is closer to goal
             \+ is_near_opponent(TX, TY, Team, 30), % Teammate is relatively open (check 30 unit radius)
             % Score: Lower is better (closer to goal is main factor)
@@ -312,7 +312,9 @@ move_towards_goal_with_ball(PlayerID) :-
     player(PlayerID, Team, Role, position(X, Y), _),
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    MoveStep is 15,
+    % PARAMETER TO BE TUNED
+    % MoveStep is 15,
+    MoveStep is 16,
 
     % Calculate direct path vector
     DX_direct is GoalX - X,
@@ -336,7 +338,7 @@ move_towards_goal_with_ball(PlayerID) :-
         NewY = NextY_direct
     ),
 
-    % update_player_position(PlayerID, NewX, NewY),
+    % update_player_position(PlayerID, NewX, NewY, Speed),
     move_player(PlayerID, NewX, NewY, MoveStep),
     player(PlayerID, _, _, position(CurrentX, CurrentY), _),
     format('~w (~w ~w) moves with ball towards goal to (~1f, ~1f)~n', [PlayerID, Team, Role, CurrentX, CurrentY]).
@@ -415,10 +417,18 @@ decide_action_without_ball(PlayerID) :-
 move_to_offensive_position(PlayerID, Team, X, Y) :-
     get_other_team(Team, OpponentTeam),
     middle_goal_position(OpponentTeam, GoalX, GoalY),
-    player(PlayerID, _, _, _, stamina(S)),
-    ( (S < 30) ->
+    player(PlayerID, Role, _, _, stamina(S)),
+    % PARAMETER TO BE TUNED
+    ((Role=forward)->
+        ( (S < 30) ->
+        (MoveStep is 12);
+        (MoveStep is 30)
+        )
+    ;
+        ( (S < 30) ->
         (MoveStep is 9);
         (MoveStep is 12)
+        )
     ),
 
     % Find open space towards the opponent goal
@@ -444,7 +454,8 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
     player(OpponentHolderID, OpponentTeam, _, position(OppX, OppY), _),
     player(PlayerID,_, Role, _, _),
     middle_goal_position(Team, MyGoalX, MyGoalY), 
-    MoveStep is 14, % Defensive moves can be slightly faster/more direct
+    middle_goal_position(OpponentTeam, OpponentGoalX, OpponentGoalY),
+    %MoveStep is 14, % Defensive moves can be slightly faster/more direct
 
     % Calculate target position: A point on the line between opponent and goal,
     % but closer to the goal (e.g., 1/3rd of the way from goal to opponent)
@@ -452,6 +463,10 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
     % VectorY = OppY - MyGoalY,
     % TargetX = MyGoalX + VectorX * 0.3, % Adjust fraction as needed (0.3 means 30% from goal)
     % TargetY = MyGoalY + VectorY * 0.3,
+
+    ball(position(Xb,Yb)),
+    euclidean_distance(Xb,Yb,MyGoalX,MyGoalY,MyBd),
+    euclidean_distance(Xb,Yb,OpponentGoalX,OpponentGoalY,OpponentBd),
 
     % Calculate movement vector towards the target defensive spot
     ( Role = defender -> (
@@ -461,6 +476,12 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
                 DistX is abs(MyGoalX - OppX)
             ),
             DistToGoalList
+        ),
+        % PARAMETER TO BE TUNED
+        ((MyBd>OpponentBd)->
+            MoveStep is 8
+        ;
+            MoveStep is 24
         ),
         sort(DistToGoalList, SortedDistToGoalList), % Sort by score (ascending)
         % Pick the best one (first in the sorted list)
@@ -475,6 +496,8 @@ move_to_defensive_position(PlayerID, Team, X, Y, OpponentHolderID) :-
             NewY is Y + NormY * MoveStep
         ); true ) 
     );
+        %PARAMETER TO BE TUNED
+        MoveStep is 8,
         TargetX is OppX,
         TargetY is OppY,
         DX is TargetX - X,
