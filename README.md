@@ -6,13 +6,13 @@ This project was developed as part of a Symbolic AI course. It demonstrates key 
 
 ## 📋 Table of Contents
 
-* [Project Overview](#project-overview)
-* [Features](#features)
-* [Prerequisites](#prerequisites)
-* [Installation](#installation)
-* [Usage](#usage)
-* [AI Implementation Details](#ai-implementation-details)
-* [File Structure](#file-structure)
+* [Project Overview](#-project-overview)
+* [Features](#-features)
+* [Prerequisites](#-prerequisites)
+* [Installation](#-installation)
+* [Usage](#-usage)
+* [AI Implementation Details](#-ai-implementation-details)
+* [File Structure](#-file-structure)
 
 ## ⚽ Project Overview
 
