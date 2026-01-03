@@ -1,8 +1,7 @@
 # RoboCup Simulation (Symbolic AI)
 
 A rule-based soccer simulation implemented using **Symbolic AI** and **Logic Programming with Prolog**, featuring a Python `tkinter` GUI for visualization.
-
-This project was developed as part of a Symbolic AI course. It demonstrates key concepts such as knowledge representation, logical reasoning, rule-based decision-making, search planning, and constraint satisfaction within a dynamic environment.
+This project demonstrates key concepts such as knowledge representation, logical reasoning, rule-based decision-making, search planning, and constraint satisfaction within a dynamic environment.
 
 ## 📋 Table of Contents
 
